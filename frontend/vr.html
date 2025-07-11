@@ -277,6 +277,7 @@
         </div>        
         <div id="selectedImages">
             <h3>Inspiration Board</h3>
+            <button id="sendToCanvasButton" style="width: 100%; padding: 10px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px;">Send to Canvas</button>
             <div id="selectedList"></div>
         </div>
         
@@ -439,6 +440,16 @@
                 }
     
                 setupEventListeners() {
+                    document.getElementById('sendToCanvasButton').addEventListener('click', () => {
+                        if (this.selectedImages.length > 0) {
+                            const imageUrls = this.selectedImages.map(imgData => imgData.imageUrl);
+                            sessionStorage.setItem('initialCanvasImages', JSON.stringify(imageUrls));
+                            window.open('canvas.html', 'vrCanvas');
+                        } else {
+                            alert('Please select at least one image to send to the canvas.');
+                        }
+                    });
+
                     document.addEventListener('click', (e) => {
                         this.onMouseClick(e);
                     });
