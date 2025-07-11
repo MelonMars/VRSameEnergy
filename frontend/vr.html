@@ -1,0 +1,616 @@
+
+
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>VR Inspiration Browser</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                background: #000;
+                font-family: 'Arial', sans-serif;
+                overflow: hidden;
+            }
+            #ui {
+                position: absolute;
+                top: 20px;
+                left: 20px;
+                color: white;
+                z-index: 100;
+                font-size: 16px;
+                background: rgba(0,0,0,0.8);
+                padding: 20px;
+                border-radius: 12px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+            #vrButton {
+                position: absolute;
+                bottom: 30px;
+                left: 30px;
+                padding: 15px 30px;
+                background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 25px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: bold;
+                z-index: 100;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            }
+            #vrButton:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            }
+            #vrButton:disabled {
+                background: #666;
+                cursor: not-allowed;
+                transform: none;
+                box-shadow: none;
+            }
+            #instructions {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: white;
+                text-align: center;
+                background: rgba(0,0,0,0.9);
+                padding: 30px;
+                border-radius: 20px;
+                z-index: 100;
+                max-width: 500px;
+                backdrop-filter: blur(15px);
+                border: 1px solid rgba(255,255,255,0.2);
+            }
+            #instructions h2 {
+                background: linear-gradient(45deg, #667eea, #764ba2);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-size: 2.5em;
+                margin-bottom: 20px;
+            }
+            #selectedImages {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                color: white;
+                z-index: 100;
+                background: rgba(0,0,0,0.8);
+                padding: 20px;
+                border-radius: 12px;
+                max-width: 250px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+            .selected-image {
+                background: rgba(255,255,255,0.1);
+                padding: 8px;
+                margin: 8px 0;
+                border-radius: 6px;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .selected-image img {
+                width: 30px;
+                height: 30px;
+                border-radius: 4px;
+                object-fit: cover;
+            }
+            #controls {
+                position: absolute;
+                bottom: 30px;
+                right: 30px;
+                color: white;
+                z-index: 100;
+                background: rgba(0,0,0,0.8);
+                padding: 15px;
+                border-radius: 12px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+            .control-group {
+                margin: 10px 0;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .control-group label {
+                min-width: 80px;
+                font-size: 14px;
+            }
+            .control-group select, .control-group input {
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                color: white;
+                padding: 5px 10px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            .control-group select option {
+                background: #333;
+                color: white;
+            }
+            .status-indicator {
+                position: absolute;
+                bottom: 100px;
+                left: 30px;
+                color: white;
+                font-size: 12px;
+                background: rgba(0,0,0,0.7);
+                padding: 10px 15px;
+                border-radius: 8px;
+                z-index: 100;
+            }
+            .status-dot {
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                margin-right: 8px;
+                background: #4CAF50;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="ui">
+            <div><strong>Images Seen:</strong> <span id="imageCount">0</span></div>
+            <div><strong>Liked:</strong> <span id="selectedCount">0</span></div>
+            <div><strong>Speed:</strong> <span id="speedDisplay">1.0x</span></div>
+            <div><strong>Search Term:</strong> <span id="currentTheme">Mixed</span></div>
+        </div>
+        
+        <div id="selectedImages">
+            <h3>Inspiration Board</h3>
+            <div id="selectedList"></div>
+        </div>
+        
+        <div id="controls">
+            <div class="control-group">
+                <label>Theme:</label>
+                <select id="themeSelect">
+                    <option value="mixed">Mixed Vibes</option>
+                    <option value="nature">Nature</option>
+                    <option value="architecture">Architecture</option>
+                    <option value="art">Art & Design</option>
+                    <option value="lifestyle">Lifestyle</option>
+                    <option value="minimal">Minimal</option>
+                    <option value="vintage">Vintage</option>
+                    <option value="cyberpunk">Cyberpunk</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Speed:</label>
+                <input type="range" id="speedSlider" min="0.3" max="3" step="0.1" value="1">
+            </div>
+        </div>
+        
+        <div class="status-indicator">
+            <span class="status-dot"></span>
+            Image Engine Active
+        </div>
+        
+        <button id="vrButton">Enter VR</button>
+        
+        <div id="instructions">
+            <h2>🎨 Inspiration Browser</h2>
+            <p>Dive into an endless stream of visual inspiration!</p>
+            <p>🖱️ <strong>Click</strong> on images that spark your creativity</p>
+            <p>🥽 <strong>VR Mode:</strong> Point and trigger to collect inspiration</p>
+            <p>Choose different themes to explore various aesthetic vibes</p>
+            <p><em>Search for what you're looking for to begin!</em></p>
+            <div class="control-group">
+                <form id="searchForm">
+                    <label for="searchInput">Search:</label>
+                    <input type="text" id="searchInput" placeholder="Type to search...">
+                    <button type="submit">Submit</button>
+                </form>
+            </div>
+        </div>
+    
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script>
+            class VRInspirationBrowser {
+                constructor() {
+                    this.scene = null;
+                    this.camera = null;
+                    this.renderer = null;
+                    this.images = [];
+                    this.selectedImages = [];
+                    this.imagesSeen = 0;
+                    this.gameStarted = false;
+                    this.isVR = false;
+                    this.controllers = [];
+                    this.raycaster = new THREE.Raycaster();
+                    this.mouse = new THREE.Vector2();
+                    this.speed = 1.0;
+                    this.spawnDelay = 800;
+                    this.backendImages = [];
+                    this.imageIndex = 0;
+                    this.currentTheme = 'Search';
+                    this.imageCache = new Map();
+                    this.searchCache = new Map();
+                    
+                    this.init();
+                    this.setupEventListeners();
+                    this.animate();
+                }
+    
+                init() {
+                    this.scene = new THREE.Scene();
+                    this.scene.background = new THREE.Color(0x0a0a0a);
+    
+                    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                    this.camera.position.set(0, 0, 0);
+    
+                    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                    this.renderer.setPixelRatio(window.devicePixelRatio);
+                    this.renderer.xr.enabled = true;
+                    document.body.appendChild(this.renderer.domElement);
+    
+                    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                    this.scene.add(ambientLight);
+    
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directionalLight.position.set(5, 10, 5);
+                    this.scene.add(directionalLight);
+    
+                    this.setupVR();
+                }
+        
+                setupVR() {
+                    const vrButton = document.getElementById('vrButton');
+                    
+                    if ('xr' in navigator) {
+                        navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+                            if (supported) {
+                                vrButton.addEventListener('click', () => this.enterVR());
+                            } else {
+                                vrButton.textContent = 'VR Not Supported';
+                                vrButton.disabled = true;
+                            }
+                        });
+                    } else {
+                        vrButton.textContent = 'WebXR Not Available';
+                        vrButton.disabled = true;
+                    }
+    
+                    const controller1 = this.renderer.xr.getController(0);
+                    controller1.addEventListener('selectstart', (e) => this.onControllerSelect(e, 0));
+                    this.scene.add(controller1);
+    
+                    const controller2 = this.renderer.xr.getController(1);
+                    controller2.addEventListener('selectstart', (e) => this.onControllerSelect(e, 1));
+                    this.scene.add(controller2);
+    
+                    this.controllers = [controller1, controller2];
+    
+                    const controllerGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.08, 6);
+                    const controllerMaterial = new THREE.MeshBasicMaterial({ color: 0x667eea });
+                    
+                    const controllerMesh1 = new THREE.Mesh(controllerGeometry, controllerMaterial);
+                    const controllerMesh2 = new THREE.Mesh(controllerGeometry, controllerMaterial);
+                    
+                    controller1.add(controllerMesh1);
+                    controller2.add(controllerMesh2);
+                }
+    
+                async enterVR() {
+                    try {
+                        const session = await navigator.xr.requestSession('immersive-vr');
+                        this.renderer.xr.setSession(session);
+                        this.isVR = true;
+                        document.getElementById('vrButton').style.display = 'none';
+                    } catch (error) {
+                        console.error('Failed to enter VR:', error);
+                    }
+                }
+    
+                setupEventListeners() {
+                    document.addEventListener('click', (e) => {
+                        this.onMouseClick(e);
+                    });
+                    
+                    document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                    window.addEventListener('resize', () => this.onWindowResize());
+                    
+                    document.getElementById('themeSelect').addEventListener('change', (e) => {
+                        document.getElementById('currentTheme').textContent = e.target.options[e.target.selectedIndex].text;
+                    });
+                    
+                    document.getElementById('speedSlider').addEventListener('input', (e) => {
+                        this.speed = parseFloat(e.target.value);
+                    });
+                }
+    
+                async startGame(searchTerm) {
+                    if (this.gameStarted) return;
+                    
+                    try {
+                        if (this.searchCache.has(searchTerm)) {
+                            this.backendImages = this.searchCache.get(searchTerm);
+                            console.log(`Using cached results for "${searchTerm}"`);
+                        } else {
+                            const response = await fetch(`http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            const data = await response.json();
+                            
+                            if (data && Array.isArray(data.images) && data.images.length > 0) {
+                                this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                                this.searchCache.set(searchTerm, this.backendImages);
+                                console.log(`Fetched and cached ${this.backendImages.length} images for "${searchTerm}"`);
+                            } else {
+                                console.error('No images found or invalid format from backend.');
+                                this.backendImages = [];  
+                                return;
+                            }
+                        }
+                
+                        this.imageIndex = 0;
+                        this.gameStarted = true;
+                        this.currentTheme = searchTerm;
+                        document.getElementById('currentTheme').textContent = searchTerm;
+                        document.getElementById('instructions').style.display = 'none';
+                        this.spawnImages(); 
+                    } catch (error) {
+                        console.error('Error fetching images from backend:', error);
+                    }
+                }
+    
+                createImageMesh(imageData) {
+                    const aspectRatio = 4/5;
+                    const width = 4;
+                    const height = width / aspectRatio;
+                    
+                    const imageGeometry = new THREE.PlaneGeometry(width, height);
+                    
+                    if (this.imageCache.has(imageData.imageUrl)) {
+                        const cachedTexture = this.imageCache.get(imageData.imageUrl);
+                        const imageMaterial = new THREE.MeshBasicMaterial({ 
+                            map: cachedTexture,
+                            transparent: true,
+                            opacity: 1.0
+                        });
+                        
+                        const image = new THREE.Mesh(imageGeometry, imageMaterial);
+                        return image;
+                    }
+                    
+                    const loader = new THREE.TextureLoader();
+                    const imageMaterial = new THREE.MeshBasicMaterial({ 
+                        transparent: true,
+                        opacity: 0,
+                        color: 0x222222
+                    });
+                    
+                    const image = new THREE.Mesh(imageGeometry, imageMaterial);
+                    
+                    loader.load(
+                        imageData.imageUrl,
+                        (texture) => {
+                            const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+                            texture.anisotropy = maxAnisotropy;
+                            texture.needsUpdate = true;
+                            
+                            this.imageCache.set(imageData.imageUrl, texture);
+                            
+                            imageMaterial.map = texture;
+                            imageMaterial.color.setHex(0xffffff);
+                            imageMaterial.needsUpdate = true;
+                            
+                            const fadeIn = () => {
+                                if (imageMaterial.opacity < 1.0) {
+                                    imageMaterial.opacity = Math.min(1.0, imageMaterial.opacity + 0.05);
+                                    requestAnimationFrame(fadeIn);
+                                }
+                            };
+                            fadeIn();
+                        },
+                        undefined,
+                        (error) => {
+                            console.warn('Failed to load texture:', imageData.imageUrl, error);
+                            imageMaterial.opacity = 0.3;
+                        }
+                    );
+                    
+                    return image;
+                }
+    
+                spawnImages() {
+                    if (!this.gameStarted || this.backendImages.length === 0) return;
+    
+                    const imageUrl = this.backendImages[this.imageIndex % this.backendImages.length];
+
+                    const imageData = {
+                        id: `backend_${Date.now()}_${this.imageIndex}`,
+                        theme: this.currentTheme,
+                        name: `${this.currentTheme} #${this.imageIndex + 1}`,
+                        imageUrl: imageUrl
+                    };
+
+                    this.imageIndex++;
+                    
+                    const image = this.createImageMesh(imageData);
+                    
+                    const maxSpawnRadius = 40;
+                    const x = (Math.random() - 0.5) * maxSpawnRadius * 2;
+                    const y = (Math.random() - 0.5) * maxSpawnRadius * 2;
+                    const z = -60 - Math.random() * 60;
+                    
+                    image.position.set(x, y, z);
+                    image.rotation.y = 0;
+    
+                    const baseSpeed = 0.025 + Math.random() * 0.02;
+                    const velocity = new THREE.Vector3(
+                        0,
+                        0,
+                        baseSpeed
+                    );
+                    
+                    image.userData = {
+                        imageData: imageData,
+                        velocity: velocity,
+                        selected: false,
+                        rotationSpeed: 0
+                    };
+                    
+                    this.scene.add(image);
+                    this.images.push(image);
+                    this.imagesSeen++;
+                    
+                    const nextSpawnDelay = (this.spawnDelay / this.speed) + Math.random() * 200;
+                    setTimeout(() => this.spawnImages(), nextSpawnDelay);
+                }
+
+    
+                onMouseClick(event) {
+                    if (!this.gameStarted || this.isVR) return;
+    
+                    this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.images);
+    
+                    if (intersects.length > 0) {
+                        const clickedImage = intersects[0].object;
+                        this.selectImage(clickedImage);
+                    }
+                }
+    
+                onMouseMove(event) {
+                    if (!this.gameStarted || this.isVR) return;
+    
+                    this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const intersects = this.raycaster.intersectObjects(this.images);
+    
+                    this.images.forEach(image => {
+                        if (!image.userData.selected) {
+                            image.scale.set(1, 1, 1);
+                            image.material.opacity = 0.9;
+                        }
+                    });
+    
+                    if (intersects.length > 0) {
+                        const hoveredImage = intersects[0].object;
+                        if (!hoveredImage.userData.selected) {
+                            hoveredImage.scale.set(1.15, 1.15, 1.15);
+                            hoveredImage.material.opacity = 1.0;
+                        }
+                    }
+                }
+    
+                onControllerSelect(event, controllerIndex) {
+                    if (!this.gameStarted) return;
+    
+                    const controller = this.controllers[controllerIndex];
+                    const tempMatrix = new THREE.Matrix4();
+                    tempMatrix.identity().extractRotation(controller.matrixWorld);
+    
+                    const raycaster = new THREE.Raycaster();
+                    raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+                    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    
+                    const intersects = raycaster.intersectObjects(this.images);
+    
+                    if (intersects.length > 0) {
+                        const image = intersects[0].object;
+                        this.selectImage(image);
+                    }
+                }
+    
+                selectImage(image) {
+                    if (image.userData.selected) return;
+
+                    image.userData.selected = true;
+
+                    this.selectedImages.push(image.userData.imageData);
+
+                    this.scene.remove(image);
+                    const index = this.images.indexOf(image);
+                    if (index > -1) this.images.splice(index, 1);
+
+                    this.updateSelectedImagesUI();
+                }
+
+                updateSelectedImagesUI() {
+                    const selectedList = document.getElementById('selectedList');
+                    selectedList.innerHTML = '';
+                    
+                    this.selectedImages.slice(-5).forEach((imageData, index) => {
+                        const imageElement = document.createElement('div');
+                        imageElement.className = 'selected-image';
+                        imageElement.innerHTML = `
+                            <img src="${imageData.imageUrl}" alt="${imageData.name}">
+                            <span>${imageData.name}</span>
+                        `;
+                        selectedList.appendChild(imageElement);
+                    });
+                }
+    
+                onWindowResize() {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                }
+    
+                updateImages() {
+                    for (let i = this.images.length - 1; i >= 0; i--) {
+                        const image = this.images[i];
+                        
+                        if (!image.userData.selected) {
+                            const velocity = image.userData.velocity.clone().multiplyScalar(this.speed);
+                            image.position.add(velocity);
+                                                        
+                            if (image.position.z > 10) {
+                                this.scene.remove(image);
+                                this.images.splice(i, 1);
+                            }
+                        }
+                    }
+                }
+    
+                updateUI() {
+                    document.getElementById('imageCount').textContent = this.imagesSeen;
+                    document.getElementById('selectedCount').textContent = this.selectedImages.length;
+                    document.getElementById('speedDisplay').textContent = this.speed.toFixed(1) + 'x';
+                }
+    
+                animate() {
+                    this.renderer.setAnimationLoop(() => {
+                        if (this.gameStarted) {
+                            this.updateImages();
+                            this.updateUI();
+                        }
+                        this.renderer.render(this.scene, this.camera);
+                    });
+                }
+            }
+    
+            window.addEventListener('load', () => {
+                const browser = new VRInspirationBrowser();
+                document.getElementById('searchForm').addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    
+                    const searchValue = document.getElementById('searchInput').value;
+                    console.log('Search submitted:', searchValue);
+                
+                    browser.startGame(searchValue);
+                });    
+            });
+        </script>
+    </body>
+</html>
