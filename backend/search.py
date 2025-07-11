@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, File, UploadFile
+from fastapi import FastAPI, Query, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -73,4 +73,72 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = 3):
     top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
     image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
     
+    return {"images": image_urls}
+
+@app.post("/search_images_blend/")
+async def search_by_images_blend(files: List[UploadFile] = File(...), top_k: int = 2):
+    embeddings = []
+
+    for file in files:
+        file_bytes = await file.read()
+        img_hash = hash_image_bytes(file_bytes)
+
+        if img_hash in image_embedding_cache:
+            emb = image_embedding_cache[img_hash]
+        else:
+            emb = embed_image(file_bytes)
+            image_embedding_cache[img_hash] = emb
+        
+        embeddings.append(emb)
+
+    if not embeddings:
+        return {"images": []}
+
+    avg_embedding = torch.stack(embeddings).mean(dim=0)
+    avg_embedding /= avg_embedding.norm(dim=-1, keepdim=True)
+
+    similarities = (image_embeddings @ avg_embedding.T).squeeze(1)
+    top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
+    image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
+
+    return {"images": image_urls}
+
+@app.post("/search_blend/")
+async def search_blend(
+    text: str = Form(None),
+    files: List[UploadFile] = File(None),
+    top_k: int = 2
+):
+    embeddings = []
+
+    if text:
+        with torch.no_grad():
+            text_tokens = clip.tokenize([text]).to(device)
+            text_embedding = model.encode_text(text_tokens)
+            text_embedding /= text_embedding.norm(dim=-1, keepdim=True)
+        embeddings.append(text_embedding)
+
+    if files:
+        for file in files:
+            file_bytes = await file.read()
+            img_hash = hash_image_bytes(file_bytes)
+
+            if img_hash in image_embedding_cache:
+                emb = image_embedding_cache[img_hash]
+            else:
+                emb = embed_image(file_bytes)
+                image_embedding_cache[img_hash] = emb
+            
+            embeddings.append(emb)
+
+    if not embeddings:
+        return {"images": []}
+
+    avg_embedding = torch.stack(embeddings).mean(dim=0)
+    avg_embedding /= avg_embedding.norm(dim=-1, keepdim=True)
+
+    similarities = (image_embeddings @ avg_embedding.T).squeeze(1)
+    top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
+    image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
+
     return {"images": image_urls}
