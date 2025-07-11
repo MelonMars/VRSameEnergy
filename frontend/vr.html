@@ -157,6 +157,16 @@
                 margin-right: 8px;
                 background: #4CAF50;
             }
+            button {
+                background: linear-gradient(45deg, #667eea, #764ba2);
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: all 0.3s ease;    
+            }
         </style>
     </head>
     <body>
@@ -165,6 +175,12 @@
             <div><strong>Liked:</strong> <span id="selectedCount">0</span></div>
             <div><strong>Speed:</strong> <span id="speedDisplay">1.0x</span></div>
             <div><strong>Search Term:</strong> <span id="currentTheme">Mixed</span></div>
+            <div class="control-group">
+                <button onclick="openHistory()"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-history-icon lucide-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
+                <label for="searchBar">Search:</label>
+                <input type="text" id="searchBar" placeholder="Type to search...">
+                <button type="submit">Submit</button>
+            </div>
         </div>
         
         <div id="selectedImages">
@@ -174,24 +190,11 @@
         
         <div id="controls">
             <div class="control-group">
-                <label>Theme:</label>
-                <select id="themeSelect">
-                    <option value="mixed">Mixed Vibes</option>
-                    <option value="nature">Nature</option>
-                    <option value="architecture">Architecture</option>
-                    <option value="art">Art & Design</option>
-                    <option value="lifestyle">Lifestyle</option>
-                    <option value="minimal">Minimal</option>
-                    <option value="vintage">Vintage</option>
-                    <option value="cyberpunk">Cyberpunk</option>
-                </select>
-            </div>
-            <div class="control-group">
                 <label>Speed:</label>
                 <input type="range" id="speedSlider" min="0.3" max="3" step="0.1" value="1">
             </div>
         </div>
-        
+         
         <div class="status-indicator">
             <span class="status-dot"></span>
             Image Engine Active
@@ -321,45 +324,82 @@
                     
                     document.addEventListener('mousemove', (e) => this.onMouseMove(e));
                     window.addEventListener('resize', () => this.onWindowResize());
-                    
-                    document.getElementById('themeSelect').addEventListener('change', (e) => {
-                        document.getElementById('currentTheme').textContent = e.target.options[e.target.selectedIndex].text;
-                    });
-                    
+
                     document.getElementById('speedSlider').addEventListener('input', (e) => {
                         this.speed = parseFloat(e.target.value);
                     });
+
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'ArrowUp') {
+                            this.speed = Math.min(this.speed + 0.1, 3.0);
+                            document.getElementById('speedSlider').value = this.speed;
+                            this.updateUI();
+                        } else if (e.key === 'ArrowDown') {
+                            this.speed = Math.max(this.speed - 0.1, 0.3);
+                            document.getElementById('speedSlider').value = this.speed;
+                            this.updateUI();
+                        }
+                    });
                 }
     
-                async startGame(searchTerm) {
-                    if (this.gameStarted) return;
-                    
-                    try {
-                        if (this.searchCache.has(searchTerm)) {
-                            this.backendImages = this.searchCache.get(searchTerm);
-                            console.log(`Using cached results for "${searchTerm}"`);
-                        } else {
-                            const response = await fetch(`http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            const data = await response.json();
-                            
-                            if (data && Array.isArray(data.images) && data.images.length > 0) {
-                                this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
-                                this.searchCache.set(searchTerm, this.backendImages);
-                                console.log(`Fetched and cached ${this.backendImages.length} images for "${searchTerm}"`);
-                            } else {
-                                console.error('No images found or invalid format from backend.');
-                                this.backendImages = [];  
-                                return;
-                            }
+                async searchImage(image) {
+                    const formData = new FormData();
+                    formData.append("file", image);
+
+                    const response = await fetch("http://127.0.0.1:8000/search_image/?top_k=2", {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data && Array.isArray(data.images) && data.images.length > 0) {
+                        this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                        console.log(`Fetched and cached ${this.backendImages.length} images from image search`);
+                    } else {
+                        console.error('No images found or invalid format from backend.');
+                        this.backendImages = [];
+                        return;
+                    }
+
+                    this.currentTheme = 'Image Search';
+                    document.getElementById('currentTheme').textContent = 'Image Search';
+                }
+
+                async searchText(searchTerm) {
+                    if (this.searchCache.has(searchTerm)) {
+                        this.backendImages = this.searchCache.get(searchTerm);
+                        console.log(`Using cached results for "${searchTerm}"`);
+                    } else {
+                        const response = await fetch(`http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
                         }
-                
+                        const data = await response.json();
+                        
+                        if (data && Array.isArray(data.images) && data.images.length > 0) {
+                            this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                            this.searchCache.set(searchTerm, this.backendImages);
+                            console.log(`Fetched and cached ${this.backendImages.length} images for "${searchTerm}"`);
+                        } else {
+                            console.error('No images found or invalid format from backend.');
+                            this.backendImages = [];  
+                            return;
+                        }
+                    }
+                    this.currentTheme = searchTerm;
+                    document.getElementById('currentTheme').textContent = searchTerm;
+                }
+
+                async startGame() {
+                    if (this.gameStarted) return;
+                    try {                
                         this.imageIndex = 0;
                         this.gameStarted = true;
-                        this.currentTheme = searchTerm;
-                        document.getElementById('currentTheme').textContent = searchTerm;
                         document.getElementById('instructions').style.display = 'none';
                         this.spawnImages(); 
                     } catch (error) {
@@ -543,6 +583,18 @@
                     const index = this.images.indexOf(image);
                     if (index > -1) this.images.splice(index, 1);
 
+                    if (image.userData.imageData && image.userData.imageData.imageUrl) {
+                        fetch(image.userData.imageData.imageUrl)
+                            .then(response => response.blob())
+                            .then(blob => {
+                                this.searchImage(blob).catch(error => {
+                                    console.error('Error searching image:', error);
+                                });
+                            })
+                            .catch(error => {
+                                console.error('Error fetching image blob:', error);
+                            });
+                    }
                     this.updateSelectedImagesUI();
                 }
 
@@ -557,6 +609,57 @@
                             <img src="${imageData.imageUrl}" alt="${imageData.name}">
                             <span>${imageData.name}</span>
                         `;
+                        imageElement.addEventListener('click', () => {
+                            const modal = document.createElement('div');
+                            modal.style.position = 'fixed';
+                            modal.style.top = '0';
+                            modal.style.left = '0';
+                            modal.style.width = '100vw';
+                            modal.style.height = '100vh';
+                            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                            modal.style.display = 'flex';
+                            modal.style.justifyContent = 'center';
+                            modal.style.alignItems = 'center';
+                            modal.style.zIndex = '1000';
+        
+                            const modalContent = document.createElement('div');
+                            modalContent.style.position = 'relative';
+                            modalContent.style.maxWidth = '90%';
+                            modalContent.style.maxHeight = '90%';
+                            modalContent.style.backgroundColor = '#000';
+                            modalContent.style.borderRadius = '12px';
+                            modalContent.style.overflow = 'hidden';
+                            modalContent.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
+        
+                            const modalImage = document.createElement('img');
+                            modalImage.src = imageData.imageUrl;
+                            modalImage.alt = imageData.name;
+                            modalImage.style.width = '100%';
+                            modalImage.style.height = '100%';
+                            modalImage.style.objectFit = 'contain';
+        
+                            const closeButton = document.createElement('button');
+                            closeButton.textContent = 'Close';
+                            closeButton.style.position = 'absolute';
+                            closeButton.style.top = '10px';
+                            closeButton.style.right = '10px';
+                            closeButton.style.padding = '10px 20px';
+                            closeButton.style.backgroundColor = '#ff4d4d';
+                            closeButton.style.color = '#fff';
+                            closeButton.style.border = 'none';
+                            closeButton.style.borderRadius = '6px';
+                            closeButton.style.cursor = 'pointer';
+                            closeButton.style.fontSize = '16px';
+        
+                            closeButton.addEventListener('click', () => {
+                                modal.remove();
+                            });
+        
+                            modalContent.appendChild(modalImage);
+                            modalContent.appendChild(closeButton);
+                            modal.appendChild(modalContent);
+                            document.body.appendChild(modal);
+                        });
                         selectedList.appendChild(imageElement);
                     });
                 }
@@ -608,8 +711,36 @@
                     const searchValue = document.getElementById('searchInput').value;
                     console.log('Search submitted:', searchValue);
                 
-                    browser.startGame(searchValue);
-                });    
+                    browser.searchText(searchValue).then(() => {
+                        browser.startGame();
+                    }).catch(error => {
+                        console.error('Error during search:', error);
+                    });
+                });
+
+                document.getElementById('searchBar').addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        const searchValue = this.value;
+                        console.log('Search submitted:', searchValue);
+                        browser.searchText(searchValue).then(() => {
+                            browser.startGame();
+                        }).catch(error => {
+                            console.error('Error during search:', error);
+                        });
+                    }
+                });
+
+                document.querySelector('#ui button[type="submit"]').addEventListener('click', function(event) {
+                    event.preventDefault();
+                    const searchValue = document.getElementById('searchBar').value;
+                    console.log('Search submitted:', searchValue);
+                    browser.searchText(searchValue).then(() => {
+                        browser.startGame();
+                    }).catch(error => {
+                        console.error('Error during search:', error);
+                    });
+                });
             });
         </script>
     </body>
