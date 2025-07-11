@@ -171,18 +171,31 @@
     </head>
     <body>
         <div id="ui">
-            <div><strong>Images Seen:</strong> <span id="imageCount">0</span></div>
-            <div><strong>Liked:</strong> <span id="selectedCount">0</span></div>
-            <div><strong>Speed:</strong> <span id="speedDisplay">1.0x</span></div>
-            <div><strong>Search Term:</strong> <span id="currentTheme">Mixed</span></div>
-            <div class="control-group">
-                <button onclick="openHistory()"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-history-icon lucide-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
-                <label for="searchBar">Search:</label>
-                <input type="text" id="searchBar" placeholder="Type to search...">
-                <button type="submit">Submit</button>
+            <div style="margin-bottom: 15px;">
+                <strong>Images Seen:</strong> <span id="imageCount">0</span>
             </div>
-        </div>
-        
+            <div style="margin-bottom: 15px;">
+                <strong>Liked:</strong> <span id="selectedCount">0</span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Speed:</strong> <span id="speedDisplay">1.0x</span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Search Term:</strong> <span id="currentTheme">Mixed</span>
+            </div>
+            <div class="control-group" style="display: flex; align-items: center; gap: 10px; margin-top: 20px;">
+                <button id="historyButton" style="background: none; border: none; cursor: pointer; padding: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-history-icon lucide-history">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                        <path d="M12 7v5l4 2"/>
+                    </svg>
+                </button> 
+                <label for="searchBar" style="font-size: 14px; font-weight: bold;">Search:</label>
+                <input type="text" id="searchBar" placeholder="Type to search..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: white; font-size: 14px;">
+                <button type="submit" style="padding: 8px 16px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">Submit</button>
+            </div>
+        </div>  
         <div id="selectedImages">
             <h3>Inspiration Board</h3>
             <div id="selectedList"></div>
@@ -240,6 +253,7 @@
                     this.currentTheme = 'Search';
                     this.imageCache = new Map();
                     this.searchCache = new Map();
+                    this.historyModalOpen = false;
                     
                     this.init();
                     this.setupEventListeners();
@@ -340,6 +354,10 @@
                             this.updateUI();
                         }
                     });
+
+                    document.getElementById('historyButton').addEventListener('click', () => {
+                        this.openHistory();
+                    });
                 }
     
                 async searchImage(image) {
@@ -406,6 +424,59 @@
                         console.error('Error fetching images from backend:', error);
                     }
                 }
+
+                openHistory() {
+                    const historyModal = document.createElement('div');
+                    historyModal.style.position = 'fixed';
+                    historyModal.style.top = '0';
+                    historyModal.style.left = '0';
+                    historyModal.style.width = '100vw';
+                    historyModal.style.height = '100vh';
+                    historyModal.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                    historyModal.style.display = 'flex';
+                    historyModal.style.justifyContent = 'center';
+                    historyModal.style.alignItems = 'center';
+                    historyModal.style.zIndex = '1000';
+                    historyModal.style.overflowY = 'auto';
+                    historyModal.style.padding = '20px';
+                    historyModal.style.boxSizing = 'border-box';
+                    historyModal.style.backdropFilter = 'blur(10px)';
+                    historyModal.style.borderRadius = '12px';
+                    historyModal.style.border = '1px solid rgba(255,255,255,0.1)';
+                    historyModal.innerHTML = `
+                        <div style="background: #222; color: white; padding: 20px; border-radius: 12px; max-width: 600px; width: 100%;">
+                            <h2>Search History</h2>
+                            <ul id="historyList" style="list-style-type: none; padding: 0;"></ul>
+                            <button id="closeHistory" style="margin-top: 20px; padding: 10px 20px; background-color: #ff4d4d; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+                        </div>
+                    `;
+                    this.historyModalOpen = true;
+                    document.body.appendChild(historyModal);
+                    const historyList = document.getElementById('historyList');
+                    this.searchCache.forEach((images, term) => {
+                        console.log("Adding history item:", term, images.length);
+                        const listItem = document.createElement('li');
+                        listItem.textContent = `${term} - ${images.length} images`;
+                        listItem.style.marginBottom = '10px';
+                        listItem.style.cursor = 'pointer';
+                        listItem.addEventListener('click', () => {
+                            this.backendImages = images;
+                            console.log("Setting current theme:", term);
+                            this.currentTheme = term;
+                            document.getElementById('currentTheme').textContent = term;
+                            this.spawnImages();
+                            historyModal.remove();
+                             setTimeout(() => {
+                                this.historyModalOpen = false;
+                            }, 500);
+                        });
+                        historyList.appendChild(listItem);
+                    });
+                    const closeButton = document.getElementById('closeHistory');
+                    closeButton.addEventListener('click', () => {
+                        historyModal.remove();
+                    });
+                }
     
                 createImageMesh(imageData) {
                     const aspectRatio = 4/5;
@@ -423,6 +494,7 @@
                         });
                         
                         const image = new THREE.Mesh(imageGeometry, imageMaterial);
+
                         return image;
                     }
                     
@@ -514,7 +586,7 @@
 
     
                 onMouseClick(event) {
-                    if (!this.gameStarted || this.isVR) return;
+                    if (!this.gameStarted || this.isVR || this.historyModalOpen) return;
     
                     this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
                     this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
