@@ -47,68 +47,106 @@ const CanvasEditor = () => {
     };
   }, [layers, viewport]);
 
-    useEffect(() => {
-        const loadState = async () => {
-            const savedStateString = localStorage.getItem('canvasState');
-            const initialImagesString = sessionStorage.getItem('initialCanvasImages');
-            setIsProcessing(true);
+  useEffect(() => {
+    const loadAndSyncState = async () => {
+        setIsProcessing(true);
 
-            const loadImageFromUrl = (url) => new Promise((resolve, reject) => {
-                const img = new Image();
-                img.crossOrigin = "Anonymous";
-                img.onload = () => resolve(img);
-                img.onerror = (err) => reject(err);
-                    img.src = url;
-                });
+        const savedStateString = localStorage.getItem('canvasState');
+        const inspirationBoardString = localStorage.getItem('vrInspirationBoard');
+        const initialImagesString = sessionStorage.getItem('initialCanvasImages'); 
 
-                if (savedStateString) {
-                    console.log("Restoring canvas state from localStorage...");
-                    const savedState = JSON.parse(savedStateString);
-                    const loadedLayers = await Promise.all(
-                        savedState.layers.map(async (layerData, index) => {
-                            try {
-                                const [image, originalImage] = await Promise.all([
-                                    loadImageFromUrl(layerData.imageUrl),
-                                    loadImageFromUrl(layerData.originalImageUrl)
-                                ]);
-                                return { 
-                                    ...layerData, 
-                                    image, 
-                                    originalImage, 
-                                    x: layerData.x + index * 20,
-                                    y: layerData.y + index * 20 
-                                };
-                            } catch (error) { return null; }
-                        })
-                    );
-                    setLayers(loadedLayers.filter(Boolean));
-                    setViewport(savedState.viewport);
-                } else if (initialImagesString) {
-                        console.log("Loading initial images from sessionStorage...");
-                        const imageUrls = JSON.parse(initialImagesString);
-                        const loadedImages = await Promise.all(
-                                imageUrls.map(url => loadImageFromUrl(url).catch(() => null))
-                        );
-                        const newLayers = loadedImages.filter(Boolean).map((img, index) => ({
-                                id: Date.now() + Math.random() + index,
-                                image: img, 
-                                originalImage: img,
-                                x: index * 50,
-                                y: index * 50,
-                                width: img.width, 
-                                height: img.height,
-                                visible: true, 
-                                name: `Layer ${index + 1}`,
+        const loadImageFromUrl = (url) => new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; 
+            img.onload = () => resolve(img);
+            img.onerror = (err) => {
+                console.error(`Failed to load image: ${url}`, err);
+                reject(err);
+            };
+            img.src = url;
+        });
+
+        let loadedLayers = [];
+
+        if (savedStateString) {
+            console.log("Restoring canvas state from localStorage...");
+            const savedState = JSON.parse(savedStateString);
+            const restoredLayers = await Promise.all(
+                savedState.layers.map(async (layerData) => {
+                    try {
+                        const [image, originalImage] = await Promise.all([
+                            loadImageFromUrl(layerData.imageUrl),
+                            loadImageFromUrl(layerData.originalImageUrl)
+                        ]);
+                        return { ...layerData, image, originalImage };
+                    } catch (error) { return null; }
+                })
+            );
+            loadedLayers = restoredLayers.filter(Boolean);
+            setLayers(loadedLayers);
+            setViewport(savedState.viewport);
+        } else if (initialImagesString) {
+            console.log("Loading initial images from sessionStorage...");
+            const imageUrls = JSON.parse(initialImagesString);
+            const initialLayers = await Promise.all(
+                imageUrls.map(async (url, index) => {
+                    try {
+                        const img = await loadImageFromUrl(url);
+                        return {
+                            id: Date.now() + Math.random() + index,
+                            image: img, originalImage: img,
+                            x: index * 50, y: index * 50,
+                            width: img.width, height: img.height,
+                            visible: true, name: `Layer ${index + 1}`,
+                            hasTransparency: false
+                        };
+                    } catch (error) { return null; }
+                })
+            );
+            loadedLayers = initialLayers.filter(Boolean);
+            setLayers(loadedLayers);
+            sessionStorage.removeItem('initialCanvasImages');
+        }
+
+        if (inspirationBoardString) {
+            const inspirationBoard = JSON.parse(inspirationBoardString);
+            
+            const existingLayerIds = new Set(loadedLayers.map(l => l.id));
+
+            const newItemsToLoad = inspirationBoard.filter(
+                item => !existingLayerIds.has(item.id)
+            );
+
+            if (newItemsToLoad.length > 0) {
+                console.log(`Syncing: Found ${newItemsToLoad.length} new items from the inspiration board.`);
+                
+                const newLayersFromBoard = await Promise.all(
+                    newItemsToLoad.map(async (item, index) => {
+                        try {
+                            const img = await loadImageFromUrl(item.imageUrl);
+                            return {
+                                id: item.id,
+                                image: img, originalImage: img,
+                                x: (loadedLayers.length + index) * 50,
+                                y: (loadedLayers.length + index) * 50,
+                                width: img.width, height: img.height,
+                                visible: true, name: item.name || `Synced Layer ${index + 1}`,
                                 hasTransparency: false
-                        }));
-                        setLayers(newLayers);
-                        sessionStorage.removeItem('initialCanvasImages');
-                }
-                setIsProcessing(false);
-        };
+                            };
+                        } catch (error) { return null; }
+                    })
+                );
+                
+                setLayers(prevLayers => [...prevLayers, ...newLayersFromBoard.filter(Boolean)]);
+            } else {
+                console.log("Syncing: Canvas is already up to date with the inspiration board.");
+            }
+        }
+        setIsProcessing(false);
+    };
 
-        loadState();
-    }, []);
+    loadAndSyncState();
+  }, []);
 
   const saveToHistory = useCallback(() => {
     setHistory(prev => [...prev.slice(-19), { layers: JSON.parse(JSON.stringify(layers)), viewport: { ...viewport } }]);
@@ -356,13 +394,22 @@ const CanvasEditor = () => {
     }
   }, [selectedLayer, layers]);
 
-  const deleteLayer = useCallback(() => {
-    if (selectedLayer) {
-      saveToHistory();
-      setLayers(prev => prev.filter(l => l.id !== selectedLayer));
-      setSelectedLayer(null);
-    }
-  }, [selectedLayer, saveToHistory]);
+    const deleteLayer = useCallback(() => {
+        if (selectedLayer) {
+            saveToHistory();
+
+            const inspirationBoardString = localStorage.getItem('vrInspirationBoard') || '[]';
+            const inspirationBoard = JSON.parse(inspirationBoardString);
+
+            const updatedBoard = inspirationBoard.filter(item => item.id !== selectedLayer);
+
+            localStorage.setItem('vrInspirationBoard', JSON.stringify(updatedBoard));
+
+            setLayers(prev => prev.filter(l => l.id !== selectedLayer));
+            setSelectedLayer(null);
+        }
+    }, [selectedLayer, saveToHistory]);
+
 
   const toggleLayerVisibility = useCallback((layerId) => {
     setLayers(prev => prev.map(layer => 

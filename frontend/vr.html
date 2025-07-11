@@ -370,11 +370,21 @@
     
                 init() {
                     const savedBoard = localStorage.getItem('vrInspirationBoard');
+                    console.log("Selected images: ", savedBoard);
                     if (savedBoard) {
-                        this.selectedImages = JSON.parse(savedBoard);
-                        console.log(`Loaded ${this.selectedImages.length} images from inspiration board.`);
+                        const board = JSON.parse(savedBoard);
+                    
+                        this.selectedImages = board.map(imgData => ({
+                            id: imgData.id,
+                            imageUrl: imgData.imageUrl,
+                            description: imgData.description || '',
+                            name: imgData.name || '', 
+                            timestamp: imgData.timestamp || new Date().toISOString()
+                        }));
+                    
+                        console.log(`Loaded ${this.selectedImages.length} images from inspiration board.`, this.selectedImages);
                         this.updateSelectedImagesUI();
-                    }
+                    }                    
 
                     this.scene = new THREE.Scene();
                     this.scene.background = new THREE.Color(0x0a0a0a);
@@ -491,7 +501,6 @@
                         document.getElementById('blendSearchSection').style.display = mode === 'blend' ? 'block' : 'none';
                     });
                 
-                    // Text search
                     document.getElementById('searchButton').addEventListener('click', () => {
                         const searchValue = document.getElementById('searchBar').value.trim();
                         if (searchValue) {
@@ -529,7 +538,6 @@
                         }
                     });
                 
-                    // Blend image preview
                     document.getElementById('blendImageUpload').addEventListener('change', (e) => {
                         const preview = document.getElementById('blendPreview');
                         preview.innerHTML = '';
@@ -894,18 +902,36 @@
     
                 selectImage(image) {
                     if (image.userData.selected) return;
-
+                
                     image.userData.selected = true;
-
-                    this.selectedImages.push(image.userData.imageData);
-
+                
+                    const imageData = image.userData.imageData;
+                
+                    const newItemForBoard = {
+                        ...imageData,
+                        id: `item-${Date.now()}-${Math.random()}`
+                    };
+                
+                    this.selectedImages.push(newItemForBoard);
+                
                     localStorage.setItem('vrInspirationBoard', JSON.stringify(this.selectedImages));
-
+                    console.log("Local storage is now: ", localStorage.getItem('vrInspirationBoard'));
+                
                     this.scene.remove(image);
                     const index = this.images.indexOf(image);
                     if (index > -1) this.images.splice(index, 1);
-
+                
                     this.updateSelectedImagesUI();
+                }
+
+                deleteImage(image) {
+                    const index = this.selectedImages.findIndex(img => img.id === image);
+                    if (index > -1) {
+                        this.selectedImages.splice(index, 1);
+                        localStorage.setItem('vrInspirationBoard', JSON.stringify(this.selectedImages));
+                        console.log("Local storage after deletion: ", localStorage.getItem('vrInspirationBoard'));
+                        this.updateSelectedImagesUI();
+                    }
                 }
 
                 updateSelectedImagesUI() {
@@ -918,7 +944,10 @@
                         imageElement.innerHTML = `
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                         <img src="${imageData.imageUrl}" alt="${imageData.name}" class="hover-target"> 
-                        <button style="padding: 5px; margin-left: 60px;" onclick="fetch('${imageData.imageUrl}')
+                        <button style="padding: 5px; margin-left: 10px;" onclick="console.log('Deleting image:', '${imageData.id}'); window.browser.deleteImage('${imageData.id}')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                        <button style="padding: 5px; margin-left: 10px;" onclick="fetch('${imageData.imageUrl}')
                             .then(response => response.blob())
                                 .then(blob => {
                                     console.log('Searching image:', blob);
