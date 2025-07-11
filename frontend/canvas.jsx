@@ -47,58 +47,68 @@ const CanvasEditor = () => {
     };
   }, [layers, viewport]);
 
-  useEffect(() => {
-    const loadState = async () => {
-        const savedStateString = localStorage.getItem('canvasState');
-        const initialImagesString = sessionStorage.getItem('initialCanvasImages');
-        setIsProcessing(true);
+    useEffect(() => {
+        const loadState = async () => {
+            const savedStateString = localStorage.getItem('canvasState');
+            const initialImagesString = sessionStorage.getItem('initialCanvasImages');
+            setIsProcessing(true);
 
-        const loadImageFromUrl = (url) => new Promise((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = () => resolve(img);
-            img.onerror = (err) => reject(err);
-            img.src = url;
-        });
+            const loadImageFromUrl = (url) => new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => resolve(img);
+                img.onerror = (err) => reject(err);
+                    img.src = url;
+                });
 
-        if (savedStateString) {
-            console.log("Restoring canvas state from localStorage...");
-            const savedState = JSON.parse(savedStateString);
-            const loadedLayers = await Promise.all(
-                savedState.layers.map(async (layerData) => {
-                    try {
-                        const [image, originalImage] = await Promise.all([
-                            loadImageFromUrl(layerData.imageUrl),
-                            loadImageFromUrl(layerData.originalImageUrl)
-                        ]);
-                        return { ...layerData, image, originalImage };
-                    } catch (error) { return null; }
-                })
-            );
-            setLayers(loadedLayers.filter(Boolean));
-            setViewport(savedState.viewport);
-        } else if (initialImagesString) {
-            console.log("Loading initial images from sessionStorage...");
-            const imageUrls = JSON.parse(initialImagesString);
-            const loadedImages = await Promise.all(
-                imageUrls.map(url => loadImageFromUrl(url).catch(() => null))
-            );
-            const newLayers = loadedImages.filter(Boolean).map((img, index) => ({
-                id: Date.now() + Math.random() + index,
-                image: img, originalImage: img,
-                x: index * 50, y: index * 50,
-                width: img.width, height: img.height,
-                visible: true, name: `Layer ${index + 1}`,
-                hasTransparency: false
-            }));
-            setLayers(newLayers);
-            sessionStorage.removeItem('initialCanvasImages');
-        }
-        setIsProcessing(false);
-    };
+                if (savedStateString) {
+                    console.log("Restoring canvas state from localStorage...");
+                    const savedState = JSON.parse(savedStateString);
+                    const loadedLayers = await Promise.all(
+                        savedState.layers.map(async (layerData, index) => {
+                            try {
+                                const [image, originalImage] = await Promise.all([
+                                    loadImageFromUrl(layerData.imageUrl),
+                                    loadImageFromUrl(layerData.originalImageUrl)
+                                ]);
+                                return { 
+                                    ...layerData, 
+                                    image, 
+                                    originalImage, 
+                                    x: layerData.x + index * 20,
+                                    y: layerData.y + index * 20 
+                                };
+                            } catch (error) { return null; }
+                        })
+                    );
+                    setLayers(loadedLayers.filter(Boolean));
+                    setViewport(savedState.viewport);
+                } else if (initialImagesString) {
+                        console.log("Loading initial images from sessionStorage...");
+                        const imageUrls = JSON.parse(initialImagesString);
+                        const loadedImages = await Promise.all(
+                                imageUrls.map(url => loadImageFromUrl(url).catch(() => null))
+                        );
+                        const newLayers = loadedImages.filter(Boolean).map((img, index) => ({
+                                id: Date.now() + Math.random() + index,
+                                image: img, 
+                                originalImage: img,
+                                x: index * 50,
+                                y: index * 50,
+                                width: img.width, 
+                                height: img.height,
+                                visible: true, 
+                                name: `Layer ${index + 1}`,
+                                hasTransparency: false
+                        }));
+                        setLayers(newLayers);
+                        sessionStorage.removeItem('initialCanvasImages');
+                }
+                setIsProcessing(false);
+        };
 
-    loadState();
-  }, []); 
+        loadState();
+    }, []);
 
   const saveToHistory = useCallback(() => {
     setHistory(prev => [...prev.slice(-19), { layers: JSON.parse(JSON.stringify(layers)), viewport: { ...viewport } }]);

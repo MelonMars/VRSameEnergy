@@ -369,6 +369,13 @@
                 }
     
                 init() {
+                    const savedBoard = localStorage.getItem('vrInspirationBoard');
+                    if (savedBoard) {
+                        this.selectedImages = JSON.parse(savedBoard);
+                        console.log(`Loaded ${this.selectedImages.length} images from inspiration board.`);
+                        this.updateSelectedImagesUI();
+                    }
+
                     this.scene = new THREE.Scene();
                     this.scene.background = new THREE.Color(0x0a0a0a);
     
@@ -891,6 +898,8 @@
                     image.userData.selected = true;
 
                     this.selectedImages.push(image.userData.imageData);
+
+                    localStorage.setItem('vrInspirationBoard', JSON.stringify(this.selectedImages));
 
                     this.scene.remove(image);
                     const index = this.images.indexOf(image);
