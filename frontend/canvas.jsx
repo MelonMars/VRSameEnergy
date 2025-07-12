@@ -16,6 +16,7 @@ const CanvasEditor = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef(null);
   const saveTimeoutRef = useRef(null);
+  const hasLoaded = useRef(false)
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -48,6 +49,14 @@ const CanvasEditor = () => {
   }, [layers, viewport]);
 
   useEffect(() => {
+    console.log("Current layers:", layers);
+  }, [layers]);
+
+  useEffect(() => {
+    if (hasLoaded.current) return
+    hasLoaded.current = true
+
+    console.log("Loading and syncing canvas state...");
     const loadAndSyncState = async () => {
         setIsProcessing(true);
 
@@ -66,11 +75,13 @@ const CanvasEditor = () => {
             img.src = url;
         });
 
-        let loadedLayers = [];
+        let layersToSet = [];
+        let viewportToSet = { x: 0, y: 0, scale: 1 };
 
         if (savedStateString) {
             console.log("Restoring canvas state from localStorage...");
             const savedState = JSON.parse(savedStateString);
+            
             const restoredLayers = await Promise.all(
                 savedState.layers.map(async (layerData) => {
                     try {
@@ -82,9 +93,38 @@ const CanvasEditor = () => {
                     } catch (error) { return null; }
                 })
             );
-            loadedLayers = restoredLayers.filter(Boolean);
-            setLayers(loadedLayers);
-            setViewport(savedState.viewport);
+            layersToSet = restoredLayers.filter(Boolean);
+            viewportToSet = savedState.viewport;
+
+            if (initialImagesString) {
+                const initialImageUrls = JSON.parse(initialImagesString);
+                const existingOriginalUrls = new Set(layersToSet.map(l => l.originalImage.src));
+                const newImageUrls = initialImageUrls.filter(url => !existingOriginalUrls.has(url));
+
+                if (newImageUrls.length > 0) {
+                    console.log(`Syncing: Adding ${newImageUrls.length} missing initial images.`);
+                    const newLayers = await Promise.all(
+                        newImageUrls.map(async (url, index) => {
+                            try {
+                                const img = await loadImageFromUrl(url);
+                                return {
+                                    id: Date.now() + Math.random() + index,
+                                    image: img, originalImage: img,
+                                    x: (layersToSet.length + index) * 50,
+                                    y: (layersToSet.length + index) * 50,
+                                    width: img.width, height: img.height,
+                                    visible: true, name: `Layer ${layersToSet.length + index + 1}`,
+                                    hasTransparency: false
+                                };
+                            } catch (error) { return null; }
+                        })
+                    );
+                    console.log(`Syncing: Added ${newLayers.length} new layers from initial images.`);
+                    layersToSet.push(...newLayers.filter(Boolean));
+                }
+                sessionStorage.removeItem('initialCanvasImages');
+            } 
+
         } else if (initialImagesString) {
             console.log("Loading initial images from sessionStorage...");
             const imageUrls = JSON.parse(initialImagesString);
@@ -103,15 +143,16 @@ const CanvasEditor = () => {
                     } catch (error) { return null; }
                 })
             );
-            loadedLayers = initialLayers.filter(Boolean);
-            setLayers(loadedLayers);
+            layersToSet = initialLayers.filter(Boolean);
             sessionStorage.removeItem('initialCanvasImages');
         }
 
+        setLayers(layersToSet);
+        setViewport(viewportToSet);
+
         if (inspirationBoardString) {
             const inspirationBoard = JSON.parse(inspirationBoardString);
-            
-            const existingLayerIds = new Set(loadedLayers.map(l => l.id));
+            const existingLayerIds = new Set(layersToSet.map(l => l.id));
 
             const newItemsToLoad = inspirationBoard.filter(
                 item => !existingLayerIds.has(item.id)
@@ -127,8 +168,8 @@ const CanvasEditor = () => {
                             return {
                                 id: item.id,
                                 image: img, originalImage: img,
-                                x: (loadedLayers.length + index) * 50,
-                                y: (loadedLayers.length + index) * 50,
+                                x: (layersToSet.length + index) * 50,
+                                y: (layersToSet.length + index) * 50,
                                 width: img.width, height: img.height,
                                 visible: true, name: item.name || `Synced Layer ${index + 1}`,
                                 hasTransparency: false
