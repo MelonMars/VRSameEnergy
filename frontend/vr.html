@@ -205,11 +205,67 @@
                 background: linear-gradient(135deg, rgba(102, 126, 234, 0.6), rgba(118, 75, 162, 0.6));
                 box-shadow: 0 0 30px rgba(102, 126, 234, 1);
             }
+            #gridContainer {
+                display: none;
+                position: absolute;
+                top: 0;
+                left: 350px; 
+                width: calc(100% - 700px);
+                height: 100%;
+                overflow-y: auto;
+                padding: 100px 20px 40px 20px;
+                box-sizing: border-box;
+                z-index: 50;
+            }
+            #imageGrid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 20px;
+            }
+            .grid-item {
+                position: relative;
+                cursor: pointer;
+                border-radius: 12px;
+                overflow: hidden;
+                border: 2px solid transparent;
+                transition: all 0.3s ease;
+            }
+            .grid-item:hover {
+                transform: scale(1.03);
+                border-color: #764ba2;
+            }
+            .grid-item img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+            .grid-item .overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                color: white;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            .grid-item:hover .overlay {
+                opacity: 1;
+            }
         </style>
     </head>
     <body>
         <div id="cursor"></div>
         <div id="ui">
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                <label for="toggle2D" style="font-weight: bold;">2D Mode:</label>
+                <input type="checkbox" id="toggle2D" style="width: 20px; height: 20px; cursor: pointer;" class="hover-target">
+            </div>
             <div style="margin-bottom: 15px;">
                 <strong>Images Seen:</strong> <span id="imageCount">0</span>
             </div>
@@ -289,7 +345,10 @@
                     <button id="multiSearchButton" style="width: 100%; padding: 10px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">Search All Themes</button>
                 </div>                
             </div>
-        </div>        
+        </div>
+        <div id="gridContainer">
+            <div id="imageGrid"></div>
+        </div>
         <div id="selectedImages">
             <h3>Inspiration Board</h3>
             <button id="sendToCanvasButton" style="width: 100%; padding: 10px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px;">Send to Canvas</button>
@@ -377,7 +436,10 @@
                     this.imageCache = new Map();
                     this.searchCache = new Map();
                     this.historyModalOpen = false;
-                    
+                    this.twodmode = false;
+                    this.gridContainer = document.getElementById('gridContainer');
+                    this.imageGrid = document.getElementById('imageGrid');
+
                     this.init();
                     this.setupEventListeners();
                     this.animate();
@@ -472,6 +534,11 @@
                 }
     
                 setupEventListeners() {
+                    document.getElementById('toggle2D').addEventListener('change', (e) => {
+                        this.twodmode = e.target.checked;
+                        this.updateDisplayMode();
+                    });
+
                     document.getElementById('sendToCanvasButton').addEventListener('click', () => {
                         if (this.selectedImages.length > 0) {
                             const imageUrls = this.selectedImages.map(imgData => imgData.imageUrl);
@@ -760,15 +827,84 @@
                 }
 
                 async startGame() {
-                    if (this.gameStarted) return;
-                    try {                
+                    this.gameStarted = true;
+                    document.getElementById('instructions').style.display = 'none';
+
+                    if (this.twodmode) {
+                        this.displayImagesAsGrid();
+                    } else {
                         this.imageIndex = 0;
-                        this.gameStarted = true;
-                        document.getElementById('instructions').style.display = 'none';
+                        this.clearScene();
                         this.spawnImages(); 
-                    } catch (error) {
-                        console.error('Error fetching images from backend:', error);
                     }
+                }
+                updateDisplayMode() {
+                    const vrButton = document.getElementById('vrButton');
+                    if (this.twodmode) {
+                        vrButton.style.display = 'none';
+                        this.renderer.domElement.style.display = 'none';
+                        this.gridContainer.style.display = 'block';
+                        document.body.style.overflow = 'hidden'; 
+                        if (this.gameStarted) {
+                            this.clearScene(); 
+                            this.displayImagesAsGrid();
+                        }
+                    } else {
+                        vrButton.style.display = 'block';
+                        this.renderer.domElement.style.display = 'block';
+                        this.gridContainer.style.display = 'none';
+                        document.body.style.overflow = 'hidden';
+                        if (this.gameStarted) {
+                            this.imageGrid.innerHTML = '';
+                            this.clearScene();
+                            this.imageIndex = 0;
+                            this.spawnImages();
+                        }
+                    }
+                }
+                displayImagesAsGrid() {
+                    this.imageGrid.innerHTML = ''; 
+                    this.imagesSeen = 0;
+                    if (this.backendImages.length === 0) return;
+
+                    this.backendImages.forEach((imageUrl, index) => {
+                        const imageData = {
+                            id: `backend_grid_${Date.now()}_${index}`,
+                            theme: this.currentTheme,
+                            name: `${this.currentTheme} #${index + 1}`,
+                            imageUrl: imageUrl
+                        };
+
+                        const item = document.createElement('div');
+                        item.className = 'grid-item hover-target';
+                        item.dataset.imageData = JSON.stringify(imageData);
+                        
+                        const img = document.createElement('img');
+                        img.src = imageUrl;
+                        img.alt = imageData.name;
+                        img.onload = () => {
+                            item.style.opacity = 1; 
+                        };
+                        item.style.opacity = 0;
+                        item.style.transition = 'opacity 0.5s ease';
+
+                        const overlay = document.createElement('div');
+                        overlay.className = 'overlay';
+                        overlay.textContent = 'Click to Select';
+                        
+                        item.appendChild(img);
+                        item.appendChild(overlay);
+
+                        item.addEventListener('click', () => {
+                            this.selectImage(null, item);
+                            item.classList.add('selected');
+                        });
+
+                        this.imageGrid.appendChild(item);
+                        this.imagesSeen++;
+                    });
+                    this.updateUI();
+                    updateHoverTargets();
                 }
 
                 openHistory() {
@@ -885,8 +1021,8 @@
                 }
     
                 spawnImages() {
-                    if (!this.gameStarted || this.backendImages.length === 0) return;
-    
+                    if (!this.gameStarted || this.twodmode || this.backendImages.length === 0) return;
+
                     const imageUrl = this.backendImages[this.imageIndex % this.backendImages.length];
 
                     const imageData = {
@@ -932,7 +1068,7 @@
 
     
                 onMouseClick(event) {
-                    if (!this.gameStarted || this.isVR || this.historyModalOpen) return;
+                    if (this.twodmode || !this.gameStarted || this.isVR || this.historyModalOpen) return;
     
                     this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
                     this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -947,7 +1083,7 @@
                 }
     
                 onMouseMove(event) {
-                    if (!this.gameStarted || this.isVR) return;
+                    if (this.twodmode || !this.gameStarted || this.isVR) return;
     
                     this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
                     this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -991,28 +1127,37 @@
                     }
                 }
     
-                selectImage(image) {
-                    if (image.userData.selected) return;
-                
-                    image.userData.selected = true;
-                
-                    const imageData = image.userData.imageData;
-                
+                selectImage(image, gridItem = null) {
+                    let imageData;
+
+                    if (gridItem) { 
+                        const dataString = gridItem.dataset.imageData;
+                        if (!dataString) return;
+                        imageData = JSON.parse(dataString);
+                    } else if (image) {
+                        if (image.userData.selected) return;
+                        image.userData.selected = true;
+                        imageData = image.userData.imageData;
+                    } else {
+                        return;
+                    }
+
                     const newItemForBoard = {
                         ...imageData,
                         id: `item-${Date.now()}-${Math.random()}`
                     };
-                
+
                     this.selectedImages.push(newItemForBoard);
-                
                     localStorage.setItem('vrInspirationBoard', JSON.stringify(this.selectedImages));
-                    console.log("Local storage is now: ", localStorage.getItem('vrInspirationBoard'));
-                
-                    this.scene.remove(image);
-                    const index = this.images.indexOf(image);
-                    if (index > -1) this.images.splice(index, 1);
-                
+                    
+                    if (image) { 
+                        this.scene.remove(image);
+                        const index = this.images.indexOf(image);
+                        if (index > -1) this.images.splice(index, 1);
+                    }
+
                     this.updateSelectedImagesUI();
+                    this.updateUI();
                 }
 
                 deleteImage(image) {
@@ -1028,7 +1173,7 @@
                 updateSelectedImagesUI() {
                     const selectedList = document.getElementById('selectedList');
                     selectedList.innerHTML = '';
-                    
+
                     this.selectedImages.slice(-5).forEach((imageData, index) => {
                         const imageElement = document.createElement('div');
                         imageElement.className = 'selected-image';
@@ -1125,6 +1270,12 @@
                     this.camera.updateProjectionMatrix();
                     this.renderer.setSize(window.innerWidth, window.innerHeight);
                 }
+                clearScene() {
+                    for (let i = this.images.length - 1; i >= 0; i--) {
+                        this.scene.remove(this.images[i]);
+                    }
+                    this.images = [];
+                }
     
                 updateImages() {
                     for (let i = this.images.length - 1; i >= 0; i--) {
@@ -1150,10 +1301,10 @@
     
                 animate() {
                     this.renderer.setAnimationLoop(() => {
-                        if (this.gameStarted) {
+                        if (this.gameStarted && !this.twodmode) {
                             this.updateImages();
-                            this.updateUI();
                         }
+                        this.updateUI();
                         this.renderer.render(this.scene, this.camera);
                     });
                 }
