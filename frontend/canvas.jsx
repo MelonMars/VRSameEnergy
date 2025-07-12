@@ -17,6 +17,7 @@ const CanvasEditor = () => {
   const fileInputRef = useRef(null);
   const saveTimeoutRef = useRef(null);
   const hasLoaded = useRef(false)
+  const [snapLines, setSnapLines] = useState([]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -352,31 +353,67 @@ const CanvasEditor = () => {
 
   const handleMouseMove = useCallback((e) => {
     const canvasPos = screenToCanvas(e.clientX, e.clientY);
-    
+    const snapThreshold = 10 / viewport.scale;
+    const gridSize = 50;
+
     if (isDragging && tool === 'move') {
-      if (selectedLayer) {
-        setLayers(prev => prev.map(layer => 
-          layer.id === selectedLayer 
-            ? { ...layer, x: canvasPos.x - dragStart.x, y: canvasPos.y - dragStart.y }
-            : layer
-        ));
-      } else {
-        setViewport(prev => ({
-          ...prev,
-          x: prev.x + (canvasPos.x - dragStart.x) * viewport.scale,
-          y: prev.y + (canvasPos.y - dragStart.y) * viewport.scale
-        }));
-      }
+        if (selectedLayer) {
+            let newX = canvasPos.x - dragStart.x;
+            let newY = canvasPos.y - dragStart.y;
+            const currentLayer = layers.find(l => l.id === selectedLayer);
+            
+            if (currentLayer) {
+                const layerEdges = {
+                    x: [newX, newX + currentLayer.width / 2, newX + currentLayer.width],
+                    y: [newY, newY + currentLayer.height / 2, newY + currentLayer.height]
+                };
+
+                const newSnapLines = [];
+
+                for (const x of layerEdges.x) {
+                    const snappedX = Math.round(x / gridSize) * gridSize;
+                    if (Math.abs(x - snappedX) < snapThreshold) {
+                        newX += snappedX - x;
+                        newSnapLines.push({ type: 'v', x: snappedX });
+                        break; 
+                    }
+                }
+
+                for (const y of layerEdges.y) {
+                    const snappedY = Math.round(y / gridSize) * gridSize;
+                    if (Math.abs(y - snappedY) < snapThreshold) {
+                        newY += snappedY - y;
+                        newSnapLines.push({ type: 'h', y: snappedY });
+                        break;
+                    }
+                }
+                setSnapLines(newSnapLines);
+            }
+
+
+            setLayers(prev => prev.map(layer =>
+                layer.id === selectedLayer
+                    ? { ...layer, x: newX, y: newY }
+                    : layer
+            ));
+        } else {
+            setViewport(prev => ({
+                ...prev,
+                x: prev.x + (canvasPos.x - dragStart.x) * viewport.scale,
+                y: prev.y + (canvasPos.y - dragStart.y) * viewport.scale
+            }));
+        }
     } else if (cropMode && tool === 'crop') {
-      setCropEnd(canvasPos);
+        setCropEnd(canvasPos);
     }
-  }, [isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale]);
+}, [isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers]);
 
   const handleMouseUp = useCallback(() => {
     if (isDragging && tool === 'move' && selectedLayer) {
       saveToHistory();
     }
     setIsDragging(false);
+    setSnapLines([]);
     
     if (cropMode && tool === 'crop' && cropStart && cropEnd && selectedLayer) {
       const layer = layers.find(l => l.id === selectedLayer);
@@ -546,6 +583,26 @@ const CanvasEditor = () => {
       }
     });
     
+    if (snapLines.length > 0) {
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 1 / viewport.scale;
+      ctx.setLineDash([5 / viewport.scale, 5 / viewport.scale]);
+
+      snapLines.forEach(line => {
+          ctx.beginPath();
+          if (line.type === 'v') {
+              ctx.moveTo(line.x, -viewport.y / viewport.scale);
+              ctx.lineTo(line.x, (canvas.height - viewport.y) / viewport.scale);
+          } else {
+              ctx.moveTo(-viewport.x / viewport.scale, line.y);
+              ctx.lineTo((canvas.width - viewport.x) / viewport.scale, line.y);
+          }
+          ctx.stroke();
+      });
+
+      ctx.setLineDash([]);
+  }
+
     if (cropMode && cropStart && cropEnd) {
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 2 / viewport.scale;
