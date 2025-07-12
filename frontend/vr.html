@@ -257,6 +257,25 @@
             .grid-item:hover .overlay {
                 opacity: 1;
             }
+            #speedSlider::-moz-range-thumb {
+                width: 18px;
+                height: 18px;
+                background: #4a90e2;
+                border-radius: 50%;
+                cursor: pointer;
+                border: none;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }
+            #speedSlider::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 18px;
+                height: 18px;
+                background: #4a90e2;
+                border-radius: 50%;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }
         </style>
     </head>
     <body>
@@ -453,6 +472,14 @@
                         openSettings: 's',
                         increaseSpeed: 'ArrowUp',
                         decreaseSpeed: 'ArrowDown'
+                    }
+                    this.keybindsName = {
+                        toggle2D: 'Toggle 2D Mode',
+                        sendToCanvas: 'Send to Canvas',
+                        openHistory: 'Open History',
+                        openSettings: 'Open Settings',
+                        increaseSpeed: 'Increase Speed',
+                        decreaseSpeed: 'Decrease Speed'
                     }
 
                     this.init();
@@ -1213,27 +1240,115 @@
                     settingsModal.style.padding = '20px';
                     settingsModal.style.boxSizing = 'border-box';
                     settingsModal.style.backdropFilter = 'blur(10px)';
+
+                    const formatKeyDisplay = (key) => {
+                        const keyMap = {
+                            'ArrowUp': '↑',
+                            'ArrowDown': '↓',
+                            'ArrowLeft': '←',
+                            'ArrowRight': '→',
+                            'Enter': '⏎',
+                            'Escape': 'Esc',
+                            'Space': '⎵',
+                            'Tab': '⇥',
+                            'Shift': '⇧',
+                            'Control': 'Ctrl',
+                            'Alt': 'Alt',
+                            'Meta': 'Cmd'
+                        };
+                        return keyMap[key] || key.toUpperCase();
+                    };
+
                     settingsModal.innerHTML = `
-                        <div style="background: #222; color: white; padding: 20px; border-radius: 12px; max-width: 400px; width: 100%;">
-                            <h2>Settings</h2>
-                            <label for="toggle2D" style="display: block; margin-bottom: 10px;">
-                                <input type="checkbox" id="toggle2D" ${this.twodmode ? 'checked' : ''}>
-                                Enable 2D Mode
-                            </label>
-                            <label for="speedSlider">Speed:</label>
-                            <input type="range" id="speedSlider" min="0.3" max="3.0" step="0.1" value="${this.speed}" style="width: 100%; margin-bottom: 20px;">
-                            <h3>Keybinds</h3>
-                            <div id="keybindsContainer" style="margin-bottom: 20px;">
+                        <div style="background: #222; color: white; padding: 30px; border-radius: 16px; max-width: 500px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+                            <h2 style="margin-top: 0; margin-bottom: 25px; font-size: 24px; text-align: center; color: #fff;">Settings</h2>
+                            
+                            <div style="margin-bottom: 30px;">
+                                <label for="toggle2D" style="display: flex; align-items: center; margin-bottom: 15px; cursor: pointer; font-size: 16px;">
+                                    <input type="checkbox" id="toggle2D" ${this.twodmode ? 'checked' : ''} style="margin-right: 10px; transform: scale(1.2);">
+                                    Enable 2D Mode
+                                </label>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="speedSlider" style="display: block; margin-bottom: 8px; font-size: 16px;">Speed: <span id="speedValue">${this.speed}</span></label>
+                                    <input type="range" id="speedSlider" min="0.3" max="3.0" step="0.1" value="${this.speed}" 
+                                           style="width: 100%; height: 6px; background: #444; border-radius: 3px; outline: none; -webkit-appearance: none;">
+                                </div>
+                            </div>
+                
+                            <h3 style="margin-bottom: 20px; font-size: 18px; color: #fff; border-bottom: 2px solid #444; padding-bottom: 8px;">
+                                ⌨️ Keybinds
+                            </h3>
+                            
+                            <div id="keybindsContainer" style="margin-bottom: 30px; display: grid; gap: 12px;">
                                 ${Object.entries(this.keybinds).map(([action, key]) => `
-                                    <div style="margin-bottom: 10px;">
-                                        <label style="display: block; font-size: 14px; margin-bottom: 5px;">${action}:</label>
-                                        <input type="text" data-action="${action}" value="${key}" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: white; font-size: 14px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                                        <span style="font-size: 14px; color: #ccc; flex: 1;">${this.keybindsName[action]}</span>
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div style="
+                                                background: linear-gradient(145deg, #333, #222);
+                                                border: 2px solid #444;
+                                                border-radius: 6px;
+                                                padding: 6px 12px;
+                                                font-family: 'Courier New', monospace;
+                                                font-size: 12px;
+                                                font-weight: bold;
+                                                color: #fff;
+                                                text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                                                box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+                                                min-width: 40px;
+                                                text-align: center;
+                                            ">${formatKeyDisplay(key)}</div>
+                                            <button 
+                                                class="keybind-btn" 
+                                                data-action="${action}" 
+                                                style="
+                                                    background: #4a90e2;
+                                                    color: white;
+                                                    border: none;
+                                                    border-radius: 4px;
+                                                    padding: 6px 10px;
+                                                    cursor: pointer;
+                                                    font-size: 12px;
+                                                    transition: all 0.2s;
+                                                "
+                                                onmouseover="this.style.background='#357abd'"
+                                                onmouseout="this.style.background='#4a90e2'"
+                                            >Change</button>
+                                        </div>
                                     </div>
                                 `).join('')}
                             </div>
-                            <button id="closeSettings" style="margin-top: 20px; padding: 10px 20px; background-color: #ff4d4d; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+                            
+                            <div style="display: flex; gap: 10px; justify-content: center;">
+                                <button id="resetKeybinds" style="
+                                    padding: 12px 20px;
+                                    background: #666;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    cursor: pointer;
+                                    font-size: 14px;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#777'" onmouseout="this.style.background='#666'">
+                                    Reset to Default
+                                </button>
+                                <button id="closeSettings" style="
+                                    padding: 12px 20px;
+                                    background: #ff4d4d;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    cursor: pointer;
+                                    font-size: 14px;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#ff3333'" onmouseout="this.style.background='#ff4d4d'">
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     `;
+
                     this.settingsModalOpen = true;
                     document.body.appendChild(settingsModal);
 
@@ -1245,36 +1360,62 @@
                     });
 
                     const speedSlider = document.getElementById('speedSlider');
+                    const speedValue = document.getElementById('speedValue');
                     speedSlider.addEventListener('input', (e) => {
                         this.speed = parseFloat(e.target.value);
-                        console.log(`Speed set to: ${this.speed}`);
+                        speedValue.textContent = this.speed;
                     });
 
-                    const keybindInputs = document.querySelectorAll('#keybindsContainer input');
-                    keybindInputs.forEach(input => {
-                        input.addEventListener('focus', (e) => {
-                            e.target.value = '';
-                        });
-
-                        input.addEventListener('blur', (e) => {
+                    const keybindButtons = document.querySelectorAll('.keybind-btn');
+                    keybindButtons.forEach(button => {
+                        button.addEventListener('click', (e) => {
                             const action = e.target.dataset.action;
-                            const newKey = e.target.value.trim();
-                            if (newKey) {
+                            const keyDisplay = e.target.parentElement.querySelector('div');
+
+                            e.target.textContent = 'Press key...';
+                            e.target.disabled = true;
+                            e.target.style.background = '#orange';
+
+                            const keyListener = (keyEvent) => {
+                                keyEvent.preventDefault();
+                                keyEvent.stopPropagation();
+
+                                const newKey = keyEvent.key;
                                 this.keybinds[action] = newKey;
+                                keyDisplay.textContent = formatKeyDisplay(newKey);
+                                
+                                e.target.textContent = 'Change';
+                                e.target.disabled = false;
+                                e.target.style.background = '#4a90e2';
+
+                                document.removeEventListener('keydown', keyListener, true);
+                                
                                 console.log(`Keybind for "${action}" updated to: ${newKey}`);
-                            } else {
-                                e.target.value = this.keybinds[action];
-                            }
+                            };
+
+                            document.addEventListener('keydown', keyListener, true);
+                        });
+                    });
+
+                    const resetButton = document.getElementById('resetKeybinds');
+                    resetButton.addEventListener('click', () => {
+                        const defaultKeybinds = {
+                            toggle2D: 't',
+                            sendToCanvas: 'c',
+                            openHistory: 'h',
+                            openSettings: 's',
+                            increaseSpeed: 'ArrowUp',
+                            decreaseSpeed: 'ArrowDown'
+                        };
+
+                        this.keybinds = { ...defaultKeybinds };
+
+                        Object.entries(this.keybinds).forEach(([action, key]) => {
+                            const keyDisplay = document.querySelector(`[data-action="${action}"]`).parentElement.querySelector('div');
+                            keyDisplay.textContent = formatKeyDisplay(key);
                         });
 
-                        input.addEventListener('keydown', (e) => {
-                            e.preventDefault();
-                            const action = e.target.dataset.action;
-                            const newKey = e.key;
-                            this.keybinds[action] = newKey;
-                            e.target.value = newKey;
-                            console.log(`Keybind for "${action}" updated to: ${newKey}`);
-                        });
+                        console.log('Keybinds reset to default');
                     });
 
                     const closeButton = document.getElementById('closeSettings');
@@ -1282,6 +1423,7 @@
                         settingsModal.remove();
                         this.settingsModalOpen = false;
                     });
+                    updateHoverTargets();
                 }
     
                 createImageMesh(imageData) {
