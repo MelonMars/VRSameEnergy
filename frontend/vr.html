@@ -439,6 +439,8 @@
                     this.twodmode = false;
                     this.gridContainer = document.getElementById('gridContainer');
                     this.imageGrid = document.getElementById('imageGrid');
+                    this.scrollAccumulator = 0;
+                    this.scrollSpawnThreshold = 100;
 
                     this.init();
                     this.setupEventListeners();
@@ -553,6 +555,8 @@
                         this.onMouseClick(e);
                     });
                     
+                    window.addEventListener('wheel', (e) => this.onMouseWheel(e)); 
+
                     document.addEventListener('mousemove', (e) => this.onMouseMove(e));
                     window.addEventListener('resize', () => this.onWindowResize());
 
@@ -984,7 +988,7 @@
                     const imageMaterial = new THREE.MeshBasicMaterial({ 
                         transparent: true,
                         opacity: 0,
-                        color: 0x222222
+                        color: new THREE.Color(0x000000)
                     });
                     
                     const image = new THREE.Mesh(imageGeometry, imageMaterial);
@@ -1020,7 +1024,7 @@
                     return image;
                 }
     
-                spawnImages() {
+                spawnSingleImage() {
                     if (!this.gameStarted || this.twodmode || this.backendImages.length === 0) return;
 
                     const imageUrl = this.backendImages[this.imageIndex % this.backendImages.length];
@@ -1062,6 +1066,13 @@
                     this.images.push(image);
                     this.imagesSeen++;
                     updateHoverTargets();
+                }
+
+                spawnImages() {
+                    if (!this.gameStarted || this.twodmode || this.backendImages.length === 0) return;
+
+                    this.spawnSingleImage();
+                    
                     const nextSpawnDelay = (this.spawnDelay / this.speed) + Math.random() * 200;
                     setTimeout(() => this.spawnImages(), nextSpawnDelay);
                 }
@@ -1105,6 +1116,25 @@
                             hoveredImage.scale.set(1.15, 1.15, 1.15);
                             hoveredImage.material.opacity = 1.0;
                         }
+                    }
+                }
+
+                onMouseWheel(event) {
+                    if (!this.gameStarted || this.twodmode) {
+                        return;
+                    }
+
+                    if (event.target.closest('#ui, #selectedImages, #controls, #gridContainer')) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    this.scrollAccumulator += Math.abs(event.deltaY);
+
+                    while (this.scrollAccumulator >= this.scrollSpawnThreshold) {
+                        this.spawnSingleImage();
+                        this.scrollAccumulator -= this.scrollSpawnThreshold;
                     }
                 }
     

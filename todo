@@ -2,6 +2,6 @@
 - Add more features to canvas
 - Add multiple text search ✅
 - Improve pagination and allow scrolling and requesting new images
-- Allow traversing the 3d space through scrolling
-- Improve styling of: Checkbox, speed bar
+- Allow traversing the 3d space through scrolling ✅
+- Improve styling of: Checkbox, speed bar (possibly gridcontainer for when there are more images)
 - Add settings for keybinds, display, &c.
