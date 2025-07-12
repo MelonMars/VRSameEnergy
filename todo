@@ -4,5 +4,4 @@
 - Improve pagination and allow scrolling and requesting new images
 - Allow traversing the 3d space through scrolling ✅
 - Improve styling of: Checkbox, speed bar (possibly gridcontainer for when there are more images)
-- Add settings for keybinds, display, &c.
-- Add pagination for image and blend
+- Add settings for keybinds, display, &c. ✅
