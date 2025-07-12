@@ -45,7 +45,7 @@ image_folder = 'images'
 image_files = sorted([f for f in os.listdir(image_folder) if f.endswith(('.png','.jpg','.jpeg'))])
 
 @app.get("/search_text/")
-def search_images(text: str = Query(..., min_length=1), top_k: int = 2):
+def search_images(text: str = Query(..., min_length=1), top_k: int = 2, page: int = 0):
     with torch.no_grad():
         text_tokens = clip.tokenize([text]).to(device)
         text_embedding = model.encode_text(text_tokens)
@@ -53,13 +53,17 @@ def search_images(text: str = Query(..., min_length=1), top_k: int = 2):
 
         img_emb_norm = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
         similarities = (img_emb_norm @ text_embedding.T).squeeze(1)
-        top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
+        sorted_indices = similarities.argsort(descending=True).cpu().tolist()
 
-    image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
-    return {"images": image_urls} 
+    start_index = page * top_k
+    end_index = start_index + top_k
+    paginated_indices = sorted_indices[start_index:end_index]
+
+    image_urls = [f"/images/{image_files[i]}" for i in paginated_indices]
+    return {"images": image_urls}
 
 @app.post("/search_image/")
-async def search_by_image(file: UploadFile = File(...), top_k: int = 3):
+async def search_by_image(file: UploadFile = File(...), top_k: int = 3, page: int = 0):
     file_bytes = await file.read()
     img_hash = hash_image_bytes(file_bytes)
 
@@ -70,13 +74,18 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = 3):
         image_embedding_cache[img_hash] = query_embedding
 
     similarities = (image_embeddings @ query_embedding.T).squeeze(1)
-    top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
-    image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
+    sorted_indices = similarities.argsort(descending=True).cpu().tolist()
+
+    start_index = page * top_k
+    end_index = start_index + top_k
+    paginated_indices = sorted_indices[start_index:end_index]
+
+    image_urls = [f"/images/{image_files[i]}" for i in paginated_indices]
     
     return {"images": image_urls}
 
 @app.post("/search_images_blend/")
-async def search_by_images_blend(files: List[UploadFile] = File(...), top_k: int = 2):
+async def search_by_images_blend(files: List[UploadFile] = File(...), top_k: int = 2, page: int = 0):
     embeddings = []
 
     for file in files:
@@ -98,8 +107,13 @@ async def search_by_images_blend(files: List[UploadFile] = File(...), top_k: int
     avg_embedding /= avg_embedding.norm(dim=-1, keepdim=True)
 
     similarities = (image_embeddings @ avg_embedding.T).squeeze(1)
-    top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
-    image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
+    sorted_indices = similarities.argsort(descending=True).cpu().tolist()
+
+    start_index = page * top_k
+    end_index = start_index + top_k
+    paginated_indices = sorted_indices[start_index:end_index]
+
+    image_urls = [f"/images/{image_files[i]}" for i in paginated_indices]
 
     return {"images": image_urls}
 
@@ -107,7 +121,8 @@ async def search_by_images_blend(files: List[UploadFile] = File(...), top_k: int
 async def search_blend(
     text: str = Form(None),
     files: List[UploadFile] = File(None),
-    top_k: int = 2
+    top_k: int = 2,
+    page: int = 0
 ):
     embeddings = []
 
@@ -138,7 +153,12 @@ async def search_blend(
     avg_embedding /= avg_embedding.norm(dim=-1, keepdim=True)
 
     similarities = (image_embeddings @ avg_embedding.T).squeeze(1)
-    top_k_indices = similarities.topk(top_k).indices.cpu().tolist()
-    image_urls = [f"/images/{image_files[i]}" for i in top_k_indices]
+    sorted_indices = similarities.argsort(descending=True).cpu().tolist()
+
+    start_index = page * top_k
+    end_index = start_index + top_k
+    paginated_indices = sorted_indices[start_index:end_index]
+
+    image_urls = [f"/images/{image_files[i]}" for i in paginated_indices]
 
     return {"images": image_urls}

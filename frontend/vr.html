@@ -441,6 +441,11 @@
                     this.imageGrid = document.getElementById('imageGrid');
                     this.scrollAccumulator = 0;
                     this.scrollSpawnThreshold = 100;
+                    this.currentPage = 0;
+                    this.isLoading = false;
+                    this.allResultsLoaded = false;
+                    this.lastSearch = { type: null, query: null };
+                    this.searchAbortController = null;
 
                     this.init();
                     this.setupEventListeners();
@@ -705,6 +710,16 @@
                             document.getElementById('blendSearchButton').click();
                         }
                     });
+
+                    this.gridContainer.addEventListener('scroll', () => {
+                        if (this.twodmode && !this.isLoading && !this.allResultsLoaded) {
+                            const { scrollTop, scrollHeight, clientHeight } = this.gridContainer;
+                            
+                            if (scrollTop + clientHeight >= scrollHeight - 500) {
+                                this.fetchPaginatedImages();
+                            }
+                        }
+                    });
                 }
     
                 async searchImage(image) {
@@ -734,6 +749,101 @@
                     this.currentTheme = 'Image Search';
                     document.getElementById('currentTheme').textContent = 'Image Search';
                 }
+
+                async fetchPaginatedImages() {
+                    if (this.isLoading || this.allResultsLoaded || !this.lastSearch.type) return;
+    
+                    this.isLoading = true;
+                    let url;
+                    const topK = 12;
+    
+                    switch (this.lastSearch.type) {
+                        case 'text':
+                            url = `http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(this.lastSearch.query)}&top_k=${topK}&page=${this.currentPage}`;
+                            break;
+                        case 'multi':
+                            const termsQuery = this.lastSearch.query.map(t => `texts=${encodeURIComponent(t)}`).join('&');
+                            url = `http://127.0.0.1:8000/search_multi_text/?${termsQuery}&top_k=${topK}&page=${this.currentPage}`;
+                            break;
+                        default:
+                            this.isLoading = false;
+                            return;
+                    }
+    
+                    try {
+                        const response = await fetch(url, { signal: this.searchAbortController.signal });
+                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        
+                        const data = await response.json();
+    
+                        if (data && Array.isArray(data.images) && data.images.length > 0) {
+                            const newImageUrls = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                            this.backendImages.push(...newImageUrls);
+                            this.appendImagesToGrid(newImageUrls);
+                            this.currentPage++;
+                        } else {
+                            this.allResultsLoaded = true;
+                            this.displayEndOfResultsMessage();
+                        }
+                    } catch (error) {
+                        if (error.name !== 'AbortError') {
+                            console.error('Error fetching paginated images:', error);
+                        }
+                    } finally {
+                        this.isLoading = false;
+                    }
+                }
+                
+                async performNewSearch(searchType, query) {
+                    if (this.searchAbortController) {
+                        this.searchAbortController.abort();
+                    }
+                    this.searchAbortController = new AbortController();
+    
+                    this.isLoading = false;
+                    this.allResultsLoaded = false;
+                    this.currentPage = 0;
+                    this.backendImages = [];
+                    this.lastSearch = { type: searchType, query: query };
+    
+                    if (this.twodmode) {
+                        this.imageGrid.innerHTML = '';
+                    } else {
+                        this.clearScene();
+                    }
+    
+                    const endMessage = this.gridContainer.querySelector('.end-of-results');
+                    if (endMessage) endMessage.remove();
+    
+                    await this.fetchPaginatedImages();
+                    this.startGame();
+                }
+    
+                async searchText(searchTerm) {
+                    this.currentTheme = searchTerm;
+                    document.getElementById('currentTheme').textContent = searchTerm;
+                    await this.performNewSearch('text', searchTerm);
+                }
+    
+                async searchMultipleTerms(terms) {
+                    const themeName = terms.join(' + ');
+                    this.currentTheme = themeName;
+                    document.getElementById('currentTheme').textContent = themeName;
+                    await this.performNewSearch('multi', terms);
+                }
+    
+                document.getElementById('multiSearchButton').addEventListener('click', async () => {
+                    const inputs = document.querySelectorAll('#multiSearchInputs input');
+                    const terms = Array.from(inputs)
+                        .map(input => input.value.trim())
+                        .filter(term => term.length > 0);
+                    
+                    if (terms.length > 0) {
+                        this.searchMultipleTerms(terms).catch(error => {
+                             console.error('Error during multi-theme search:', error);
+                        });
+                    }
+                });
 
                 async searchBlend(text = '', files = []) {
                     const formData = new FormData();
@@ -866,7 +976,7 @@
                         }
                     }
                 }
-                displayImagesAsGrid() {
+                /* displayImagesAsGrid() {
                     this.imageGrid.innerHTML = ''; 
                     this.imagesSeen = 0;
                     if (this.backendImages.length === 0) return;
@@ -909,6 +1019,61 @@
                     });
                     this.updateUI();
                     updateHoverTargets();
+                }
+                */
+                displayImagesAsGrid() {
+                    this.imageGrid.innerHTML = '';
+                    this.appendImagesToGrid(this.backendImages);
+                }
+    
+                appendImagesToGrid(newImageUrls) {
+                    if (newImageUrls.length === 0) return;
+    
+                    const fragment = document.createDocumentFragment();
+                    newImageUrls.forEach((imageUrl, index) => {
+                        const imageData = {
+                            id: `backend_grid_${Date.now()}_${this.imagesSeen + index}`,
+                            theme: this.currentTheme,
+                            name: `${this.currentTheme} #${this.imagesSeen + index + 1}`,
+                            imageUrl: imageUrl
+                        };
+                        const item = document.createElement('div');
+                        item.className = 'grid-item hover-target';
+                        item.dataset.imageData = JSON.stringify(imageData);
+                        const img = document.createElement('img');
+                        img.src = imageUrl;
+                        img.alt = imageData.name;
+                        img.onload = () => {
+                            item.style.opacity = 1; 
+                        };
+                        item.style.opacity = 0;
+                        item.style.transition = 'opacity 0.5s ease';
+
+                        const overlay = document.createElement('div');
+                        overlay.className = 'overlay';
+                        overlay.textContent = 'Click to Select';
+                        item.appendChild(img);
+                        fragment.appendChild(item);
+                    });
+    
+                    this.imageGrid.appendChild(fragment);
+                    this.imagesSeen += newImageUrls.length;
+                    this.updateUI();
+                    updateHoverTargets();
+                }
+    
+                displayEndOfResultsMessage() {
+                    const messageElement = document.createElement('div');
+                    messageElement.className = 'end-of-results';
+                    messageElement.textContent = "You've reached the end!";
+                    messageElement.style.cssText = `
+                        text-align: center; 
+                        padding: 40px; 
+                        font-size: 1.2em; 
+                        color: rgba(255, 255, 255, 0.7);
+                        width: 100%;
+                    `;
+                    this.gridContainer.appendChild(messageElement);
                 }
 
                 openHistory() {
