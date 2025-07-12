@@ -230,6 +230,7 @@
                         <option value="text">Text Search</option>
                         <option value="image">Image Search</option>
                         <option value="blend">Blend Search</option>
+                        <option value="multi">Multi-Theme Search</option>
                     </select>
                 </div>
                 
@@ -273,6 +274,20 @@
                     <div id="blendPreview" style="margin-bottom: 10px; display: flex; gap: 5px; flex-wrap: wrap;"></div>
                     <button id="blendSearchButton" style="width: 100%; padding: 10px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">Search Blend</button>
                 </div>
+
+                <div id="multiSearchSection" style="display: none;">
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-weight: bold; margin-bottom: 5px; display: block;">Search Terms:</label>
+                        <div id="multiSearchInputs">
+                            <div class="multi-search-input" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="text" placeholder="Enter search term..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: white; font-size: 14px;">
+                                <button type="button" class="remove-term" style="padding: 8px; background: #ff4d4d; color: white; border: none; border-radius: 6px; cursor: pointer;">×</button>
+                            </div>
+                        </div>
+                        <button id="addTermButton" style="width: 100%; padding: 8px; background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; cursor: pointer;">+ Add Another Term</button>
+                    </div>
+                    <button id="multiSearchButton" style="width: 100%; padding: 10px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">Search All Themes</button>
+                </div>                
             </div>
         </div>        
         <div id="selectedImages">
@@ -499,7 +514,57 @@
                         document.getElementById('textSearchSection').style.display = mode === 'text' ? 'block' : 'none';
                         document.getElementById('imageSearchSection').style.display = mode === 'image' ? 'block' : 'none';
                         document.getElementById('blendSearchSection').style.display = mode === 'blend' ? 'block' : 'none';
+                        document.getElementById('multiSearchSection').style.display = mode === 'multi' ? 'block' : 'none';
                     });
+
+                    document.getElementById('addTermButton').addEventListener('click', () => {
+                        const container = document.getElementById('multiSearchInputs');
+                        const newInput = document.createElement('div');
+                        newInput.className = 'multi-search-input';
+                        newInput.style.cssText = 'display: flex; gap: 8px; margin-bottom: 8px;';
+                        newInput.innerHTML = `
+                            <input type="text" placeholder="Enter search term..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: white; font-size: 14px;">
+                            <button type="button" class="remove-term" style="padding: 8px; background: #ff4d4d; color: white; border: none; border-radius: 6px; cursor: pointer;">×</button>
+                        `;
+                        container.appendChild(newInput);
+                        updateHoverTargets();
+                    });
+                    
+                    document.getElementById('multiSearchInputs').addEventListener('click', (e) => {
+                        if (e.target.classList.contains('remove-term')) {
+                            const inputs = document.querySelectorAll('.multi-search-input');
+                            if (inputs.length > 1) {
+                                e.target.closest('.multi-search-input').remove();
+                            }
+                        }
+                    });
+
+                    document.getElementById('multiSearchButton').addEventListener('click', async () => {
+                        const inputs = document.querySelectorAll('#multiSearchInputs input');
+                        const terms = Array.from(inputs)
+                            .map(input => input.value.trim())
+                            .filter(term => term.length > 0);
+                        
+                        if (terms.length === 0) return;
+                        
+                        try {
+                            this.backendImages = [];
+                            this.imageIndex = 0;
+                            
+                            await this.searchText(terms[0]);
+                            
+                            for (let i = 1; i < terms.length; i++) {
+                                await this.searchTextAndAdd(terms[i]);
+                            }
+                            
+                            this.currentTheme = terms.join(' + ');
+                            document.getElementById('currentTheme').textContent = this.currentTheme;
+                            
+                            this.startGame();
+                        } catch (error) {
+                            console.error('Error during multi-theme search:', error);
+                        }
+                    });                    
                 
                     document.getElementById('searchButton').addEventListener('click', () => {
                         const searchValue = document.getElementById('searchBar').value.trim();
@@ -666,6 +731,32 @@
                     }
                     this.currentTheme = searchTerm;
                     document.getElementById('currentTheme').textContent = searchTerm;
+                }
+
+                async searchTextAndAdd(searchTerm) {
+                    if (this.searchCache.has(searchTerm)) {
+                        const cachedImages = this.searchCache.get(searchTerm);
+                        this.backendImages.push(...cachedImages);
+                    } else {
+                        const response = await fetch(`http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        const data = await response.json();
+
+                        if (data && Array.isArray(data.images) && data.images.length > 0) {
+                            this.backendImages.push(...data.images.map(img => `http://127.0.0.1:8000${img}`));
+                            this.searchCache.set(searchTerm, this.backendImages);
+                            console.log(`Fetched and cached ${data.images.length} images for "${searchTerm}"`);
+                        } else {
+                            console.error('No images found or invalid format from backend.');
+                            this.backendImages = [];
+                            return;
+                        }
+                    }
+                    this.currentTheme = searchTerm;
+                    document.getElementById('currentTheme').textContent = searchTerm;
+                    this.imageIndex = 0;
                 }
 
                 async startGame() {
@@ -943,7 +1034,9 @@
                         imageElement.className = 'selected-image';
                         imageElement.innerHTML = `
                         <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <img src="${imageData.imageUrl}" alt="${imageData.name}" class="hover-target"> 
+                        <img src="${imageData.imageUrl}" alt="${imageData.name}" class="hover-target" style="transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);"
+                        onmouseenter="this.style.transform='translateY(-3px) scale(1.05)';"
+                        onmouseleave="this.style.transform='translateY(0) scale(1)';">
                         <button style="padding: 5px; margin-left: 10px;" onclick="console.log('Deleting image:', '${imageData.id}'); window.browser.deleteImage('${imageData.id}')">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
