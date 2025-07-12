@@ -343,7 +343,10 @@
                         <button id="addTermButton" style="width: 100%; padding: 8px; background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; cursor: pointer;">+ Add Another Term</button>
                     </div>
                     <button id="multiSearchButton" style="width: 100%; padding: 10px; border-radius: 6px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">Search All Themes</button>
-                </div>                
+                </div>
+                <button id="settingsButton" style="background: none; border: none; cursor: pointer; padding: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings-icon lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
             </div>
         </div>
         <div id="gridContainer">
@@ -356,12 +359,6 @@
             <div id="selectedList"></div>
         </div>
         
-        <div id="controls">
-            <div class="control-group">
-                <label>Speed:</label>
-                <input type="range" id="speedSlider" min="0.3" max="3" step="0.1" value="1">
-            </div>
-        </div>
         <button id="vrButton">Enter VR</button>
         
         <div id="instructions">
@@ -437,6 +434,7 @@
                     this.imageCache = new Map();
                     this.searchCache = new Map();
                     this.historyModalOpen = false;
+                    this.settingsModalOpen = false;
                     this.twodmode = false;
                     this.gridContainer = document.getElementById('gridContainer');
                     this.imageGrid = document.getElementById('imageGrid');
@@ -448,6 +446,14 @@
                     this.lastSearch = { type: null, query: null };
                     this.searchAbortController = null;
                     this.observer = null;
+                    this.keybinds = {
+                        toggle2D: 't',
+                        sendToCanvas: 'c',
+                        openHistory: 'h',
+                        openSettings: 's',
+                        increaseSpeed: 'ArrowUp',
+                        decreaseSpeed: 'ArrowDown'
+                    }
 
                     this.init();
                     this.setupEventListeners();
@@ -567,6 +573,11 @@
                 }
     
                 setupEventListeners() {
+                    document.getElementById('settingsButton').addEventListener('click', () => {
+                        this.settingsModalOpen = !this.settingsModalOpen;
+                        this.openSettings();
+                    });
+
                     document.getElementById('toggle2D').addEventListener('change', (e) => {
                         this.twodmode = e.target.checked;
                         this.updateDisplayMode();
@@ -591,24 +602,32 @@
                     document.addEventListener('mousemove', (e) => this.onMouseMove(e));
                     window.addEventListener('resize', () => this.onWindowResize());
 
-                    document.getElementById('speedSlider').addEventListener('input', (e) => {
-                        this.speed = parseFloat(e.target.value);
-                    });
-
                     document.addEventListener('keydown', (e) => {
-                        if (e.key === 'ArrowUp') {
+                        if (e.key === this.keybinds.increaseSpeed) {
                             this.speed = Math.min(this.speed + 0.1, 3.0);
-                            document.getElementById('speedSlider').value = this.speed;
-                            this.updateUI();
-                        } else if (e.key === 'ArrowDown') {
+                        } else if (e.key === this.keybinds.decreaseSpeed) {
                             this.speed = Math.max(this.speed - 0.1, 0.3);
-                            document.getElementById('speedSlider').value = this.speed;
-                            this.updateUI();
                         }
                     });
 
                     document.getElementById('historyButton').addEventListener('click', () => {
                         this.openHistory();
+                    });
+
+                    document.addEventListener('keydown', (e) => {
+                        console.log("Key pressed:", e.key);
+                        console.log("Keybinds: ", this.keybinds);
+                        if (e.key === this.keybinds.toggle2D) {
+                            document.getElementById('toggle2D').checked = !document.getElementById('toggle2D').checked;
+                            this.twodmode = document.getElementById('toggle2D').checked;
+                            this.updateDisplayMode();
+                        } else if (e.key === this.keybinds.sendToCanvas) {
+                            document.getElementById('sendToCanvasButton').click();
+                        } else if (e.key === this.keybinds.openHistory) {
+                            document.getElementById('historyButton').click();
+                        } else if (e.key === this.keybinds.openSettings) {
+                            document.getElementById('settingsButton').click();
+                        }
                     });
 
                     document.getElementById('searchMode').addEventListener('change', (e) => {
@@ -1177,6 +1196,93 @@
                         historyModal.remove();
                     });
                 }
+
+                openSettings() {
+                    const settingsModal = document.createElement('div');
+                    settingsModal.style.position = 'fixed';
+                    settingsModal.style.top = '0';
+                    settingsModal.style.left = '0';
+                    settingsModal.style.width = '100vw';
+                    settingsModal.style.height = '100vh';
+                    settingsModal.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                    settingsModal.style.display = 'flex';
+                    settingsModal.style.justifyContent = 'center';
+                    settingsModal.style.alignItems = 'center';
+                    settingsModal.style.zIndex = '1000';
+                    settingsModal.style.overflowY = 'auto';
+                    settingsModal.style.padding = '20px';
+                    settingsModal.style.boxSizing = 'border-box';
+                    settingsModal.style.backdropFilter = 'blur(10px)';
+                    settingsModal.innerHTML = `
+                        <div style="background: #222; color: white; padding: 20px; border-radius: 12px; max-width: 400px; width: 100%;">
+                            <h2>Settings</h2>
+                            <label for="toggle2D" style="display: block; margin-bottom: 10px;">
+                                <input type="checkbox" id="toggle2D" ${this.twodmode ? 'checked' : ''}>
+                                Enable 2D Mode
+                            </label>
+                            <label for="speedSlider">Speed:</label>
+                            <input type="range" id="speedSlider" min="0.3" max="3.0" step="0.1" value="${this.speed}" style="width: 100%; margin-bottom: 20px;">
+                            <h3>Keybinds</h3>
+                            <div id="keybindsContainer" style="margin-bottom: 20px;">
+                                ${Object.entries(this.keybinds).map(([action, key]) => `
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="display: block; font-size: 14px; margin-bottom: 5px;">${action}:</label>
+                                        <input type="text" data-action="${action}" value="${key}" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: white; font-size: 14px;">
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <button id="closeSettings" style="margin-top: 20px; padding: 10px 20px; background-color: #ff4d4d; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+                        </div>
+                    `;
+                    this.settingsModalOpen = true;
+                    document.body.appendChild(settingsModal);
+
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape' && this.settingsModalOpen) {
+                            settingsModal.remove();
+                            this.settingsModalOpen = false;
+                        }
+                    });
+
+                    const speedSlider = document.getElementById('speedSlider');
+                    speedSlider.addEventListener('input', (e) => {
+                        this.speed = parseFloat(e.target.value);
+                        console.log(`Speed set to: ${this.speed}`);
+                    });
+
+                    const keybindInputs = document.querySelectorAll('#keybindsContainer input');
+                    keybindInputs.forEach(input => {
+                        input.addEventListener('focus', (e) => {
+                            e.target.value = '';
+                        });
+
+                        input.addEventListener('blur', (e) => {
+                            const action = e.target.dataset.action;
+                            const newKey = e.target.value.trim();
+                            if (newKey) {
+                                this.keybinds[action] = newKey;
+                                console.log(`Keybind for "${action}" updated to: ${newKey}`);
+                            } else {
+                                e.target.value = this.keybinds[action];
+                            }
+                        });
+
+                        input.addEventListener('keydown', (e) => {
+                            e.preventDefault();
+                            const action = e.target.dataset.action;
+                            const newKey = e.key;
+                            this.keybinds[action] = newKey;
+                            e.target.value = newKey;
+                            console.log(`Keybind for "${action}" updated to: ${newKey}`);
+                        });
+                    });
+
+                    const closeButton = document.getElementById('closeSettings');
+                    closeButton.addEventListener('click', () => {
+                        settingsModal.remove();
+                        this.settingsModalOpen = false;
+                    });
+                }
     
                 createImageMesh(imageData) {
                     const aspectRatio = 4/5;
@@ -1293,7 +1399,7 @@
 
     
                 onMouseClick(event) {
-                    if (this.twodmode || !this.gameStarted || this.isVR || this.historyModalOpen) return;
+                    if (this.twodmode || !this.gameStarted || this.isVR || this.historyModalOpen || this.settingsModalOpen) return;
     
                     this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
                     this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
