@@ -21,6 +21,7 @@ const CanvasEditor = () => {
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [pngBackgroundType, setPngBackgroundType] = useState('transparent');
   const [pngBackgroundColor, setPngBackgroundColor] = useState('#ffffff');
+  const [uploadProjectModalOpen, setUploadProjectModalOpen] = useState(false);
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -689,6 +690,10 @@ const CanvasEditor = () => {
     setDownloadModalOpen(true);
   }
 
+  const uploadProject = () => {
+    setUploadProjectModalOpen(true);
+  }
+
   useEffect(() => {
     renderCanvas();
   }, [renderCanvas]);
@@ -837,6 +842,13 @@ const CanvasEditor = () => {
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download-icon lucide-download"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>
               Download
+            </button>
+            <button
+              onClick={uploadProject}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload-icon lucide-upload"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+              Upload
             </button>
           </div>
           
@@ -1121,7 +1133,114 @@ const CanvasEditor = () => {
           </div>
         </div>
       )}
-      
+      {uploadProjectModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+            <h2 className="text-lg font-semibold mb-4">Upload Project</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Select a JSON file exported from the canvas editor to restore your project.
+            </p>
+            
+            <div className="mb-4">
+              <input
+                type="file"
+                accept=".json"
+                onChange={async (e) => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  
+                  try {
+                    const text = await file.text();
+                    const projectData = JSON.parse(text);
+                    
+                    if (!projectData.layers || !Array.isArray(projectData.layers)) {
+                      throw new Error('Invalid project file structure');
+                    }
+                    
+                    setIsProcessing(true);
+                    
+                    const loadedLayers = await Promise.all(
+                      projectData.layers.map(async (layerData) => {
+                        try {
+                          const loadImageFromDataUrl = (dataUrl) => new Promise((resolve, reject) => {
+                            const img = new Image();
+                            img.onload = () => resolve(img);
+                            img.onerror = reject;
+                            img.src = dataUrl;
+                          });
+                          
+                          let image, originalImage;
+                          
+                          if (layerData.imageDataUrl) {
+                            image = await loadImageFromDataUrl(layerData.imageDataUrl);
+                          } else if (layerData.imageUrl) {
+                            image = await loadImageFromDataUrl(layerData.imageUrl);
+                          } else {
+                            throw new Error('No image data found');
+                          }
+                          
+                          if (layerData.originalImageDataUrl) {
+                            originalImage = await loadImageFromDataUrl(layerData.originalImageDataUrl);
+                          } else if (layerData.originalImageUrl) {
+                            originalImage = await loadImageFromDataUrl(layerData.originalImageUrl);
+                          } else {
+                            originalImage = image;
+                          }
+                          
+                          return {
+                            id: layerData.id,
+                            image,
+                            originalImage,
+                            x: layerData.x,
+                            y: layerData.y,
+                            width: layerData.width,
+                            height: layerData.height,
+                            visible: layerData.visible !== false,
+                            name: layerData.name || 'Imported Layer',
+                            hasTransparency: layerData.hasTransparency || false
+                          };
+                        } catch (error) {
+                          console.warn(`Failed to load layer ${layerData.id}:`, error);
+                          return null;
+                        }
+                      })
+                    );
+                    
+                    const validLayers = loadedLayers.filter(Boolean);
+                    
+                    if (validLayers.length === 0) {
+                      throw new Error('No valid layers found in the project file');
+                    }
+                    
+                    setLayers(validLayers);
+                    if (projectData.viewport) {
+                      setViewport(projectData.viewport);
+                    }
+                    
+                    setIsProcessing(false);
+                    setUploadProjectModalOpen(false);
+                    
+                  } catch (error) {
+                    console.error('Failed to load project:', error);
+                    alert('Failed to load project file. Please make sure it\'s a valid JSON export from the canvas editor.');
+                    setIsProcessing(false);
+                  }
+                }}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setUploadProjectModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"
