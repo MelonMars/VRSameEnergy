@@ -348,6 +348,7 @@
         </div>
         <div id="gridContainer">
             <div id="imageGrid"></div>
+            <div id="sentinel" style="height: 50px;"></div>
         </div>
         <div id="selectedImages">
             <h3>Inspiration Board</h3>
@@ -441,11 +442,12 @@
                     this.imageGrid = document.getElementById('imageGrid');
                     this.scrollAccumulator = 0;
                     this.scrollSpawnThreshold = 100;
-                    this.currentPage = 0;
+                    this.currentPage = 1;
                     this.isLoading = false;
                     this.allResultsLoaded = false;
                     this.lastSearch = { type: null, query: null };
                     this.searchAbortController = null;
+                    this.observer = null;
 
                     this.init();
                     this.setupEventListeners();
@@ -488,10 +490,34 @@
                     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
                     directionalLight.position.set(5, 10, 5);
                     this.scene.add(directionalLight);
-    
+                    this.setupIntersectionObserver();
                     this.setupVR();
                 }
         
+                setupIntersectionObserver() {
+                    const options = {
+                        root: this.gridContainer,
+                        rootMargin: '0px',
+                        threshold: 0.5
+                    };
+                
+                    this.observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting && !this.isLoading && !this.allResultsLoaded) {
+                                console.log('Sentinel is visible. Fetching paginated images...');
+                                this.fetchPaginatedImages();
+                            }
+                        });
+                    }, options);
+                
+                    const sentinel = document.getElementById('sentinel');
+                    if (sentinel) {
+                        this.observer.observe(sentinel);
+                    } else {
+                        console.error('Sentinel element not found. Ensure it exists in the DOM.');
+                    }
+                }
+
                 setupVR() {
                     const vrButton = document.getElementById('vrButton');
                     
@@ -750,51 +776,73 @@
                     document.getElementById('currentTheme').textContent = 'Image Search';
                 }
 
-                async fetchPaginatedImages() {
-                    if (this.isLoading || this.allResultsLoaded || !this.lastSearch.type) return;
-    
+                async fetchPaginatedImages() {    
+                    console.log(`Starting fetchPaginatedImages for page ${this.currentPage + 1}...`);
                     this.isLoading = true;
                     let url;
-                    const topK = 12;
+                    const topK = 2;
     
+                    console.log(`Preparing to fetch images for search type: ${this.lastSearch.type} and query: ${this.lastSearch.query}`);
                     switch (this.lastSearch.type) {
                         case 'text':
+                            console.log(`Fetching text search results for query: "${this.lastSearch.query}"`);
                             url = `http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(this.lastSearch.query)}&top_k=${topK}&page=${this.currentPage}`;
                             break;
                         case 'multi':
+                            console.log(`Fetching multi-text search results for queries: ${this.lastSearch.query.join(', ')}`);
                             const termsQuery = this.lastSearch.query.map(t => `texts=${encodeURIComponent(t)}`).join('&');
                             url = `http://127.0.0.1:8000/search_multi_text/?${termsQuery}&top_k=${topK}&page=${this.currentPage}`;
                             break;
                         default:
+                            console.warn('Unknown search type. Aborting fetchPaginatedImages.');
                             this.isLoading = false;
                             return;
                     }
     
+                    console.log(`Constructed URL: ${url}`);
+    
                     try {
+                        if (!this.searchAbortController) {
+                            this.searchAbortController = new AbortController();
+                        }
                         const response = await fetch(url, { signal: this.searchAbortController.signal });
-                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        console.log(`Received response with status: ${response.status}`);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
                         
                         const data = await response.json();
+                        console.log('Response data:', data);
     
                         if (data && Array.isArray(data.images) && data.images.length > 0) {
+                            console.log(`Fetched ${data.images.length} new images.`);
                             const newImageUrls = data.images.map(img => `http://127.0.0.1:8000${img}`);
                             this.backendImages.push(...newImageUrls);
+                            this.backendImages = [...new Set(this.backendImages)]; 
+                            console.log(`Total images in backendImages: ${this.backendImages.length}`);
                             this.appendImagesToGrid(newImageUrls);
                             this.currentPage++;
+                            console.log(`Incremented currentPage to ${this.currentPage}`);
                         } else {
+                            console.log('No more images found. Marking allResultsLoaded as true.');
                             this.allResultsLoaded = true;
                             this.displayEndOfResultsMessage();
                         }
                     } catch (error) {
-                        if (error.name !== 'AbortError') {
+                        if (error.name === 'AbortError') {
+                            console.warn('Fetch aborted by user.');
+                        } else {
                             console.error('Error fetching paginated images:', error);
                         }
                     } finally {
                         this.isLoading = false;
+                        console.log('fetchPaginatedImages completed.');
                     }
                 }
                 
                 async performNewSearch(searchType, query) {
+                    console.log(`Performing new search of type "${searchType}" with query: "${query}"`);
                     if (this.searchAbortController) {
                         this.searchAbortController.abort();
                     }
@@ -802,7 +850,7 @@
     
                     this.isLoading = false;
                     this.allResultsLoaded = false;
-                    this.currentPage = 0;
+                    this.currentPage = 1;
                     this.backendImages = [];
                     this.lastSearch = { type: searchType, query: query };
     
@@ -832,7 +880,7 @@
                     await this.performNewSearch('multi', terms);
                 }
     
-                document.getElementById('multiSearchButton').addEventListener('click', async () => {
+                /*document.getElementById('multiSearchButton').addEventListener('click', async () => {
                     const inputs = document.querySelectorAll('#multiSearchInputs input');
                     const terms = Array.from(inputs)
                         .map(input => input.value.trim())
@@ -843,7 +891,7 @@
                              console.error('Error during multi-theme search:', error);
                         });
                     }
-                });
+                });*/
 
                 async searchBlend(text = '', files = []) {
                     const formData = new FormData();
@@ -976,7 +1024,8 @@
                         }
                     }
                 }
-                /* displayImagesAsGrid() {
+
+                displayImagesAsGrid() {
                     this.imageGrid.innerHTML = ''; 
                     this.imagesSeen = 0;
                     if (this.backendImages.length === 0) return;
@@ -1020,26 +1069,20 @@
                     this.updateUI();
                     updateHoverTargets();
                 }
-                */
-                displayImagesAsGrid() {
-                    this.imageGrid.innerHTML = '';
-                    this.appendImagesToGrid(this.backendImages);
-                }
     
-                appendImagesToGrid(newImageUrls) {
-                    if (newImageUrls.length === 0) return;
-    
-                    const fragment = document.createDocumentFragment();
-                    newImageUrls.forEach((imageUrl, index) => {
+                appendImagesToGrid(imageUrls) {
+                    imageUrls.forEach((imageUrl, index) => {
                         const imageData = {
-                            id: `backend_grid_${Date.now()}_${this.imagesSeen + index}`,
+                            id: `backend_grid_${Date.now()}_${this.imageIndex + index}`,
                             theme: this.currentTheme,
-                            name: `${this.currentTheme} #${this.imagesSeen + index + 1}`,
+                            name: `${this.currentTheme} #${this.imageIndex + index + 1}`,
                             imageUrl: imageUrl
                         };
+
                         const item = document.createElement('div');
                         item.className = 'grid-item hover-target';
                         item.dataset.imageData = JSON.stringify(imageData);
+                        
                         const img = document.createElement('img');
                         img.src = imageUrl;
                         img.alt = imageData.name;
@@ -1052,17 +1095,23 @@
                         const overlay = document.createElement('div');
                         overlay.className = 'overlay';
                         overlay.textContent = 'Click to Select';
+                        
                         item.appendChild(img);
-                        fragment.appendChild(item);
+                        item.appendChild(overlay);
+
+                        item.addEventListener('click', () => {
+                            this.selectImage(null, item);
+                            item.classList.add('selected');
+                        });
+
+                        this.imageGrid.appendChild(item);
                     });
-    
-                    this.imageGrid.appendChild(fragment);
-                    this.imagesSeen += newImageUrls.length;
+                    this.imageIndex += imageUrls.length;
                     this.updateUI();
-                    updateHoverTargets();
                 }
     
                 displayEndOfResultsMessage() {
+                    console.log("Displaying end of results message");
                     const messageElement = document.createElement('div');
                     messageElement.className = 'end-of-results';
                     messageElement.textContent = "You've reached the end!";
@@ -1513,7 +1562,7 @@
                     
                     const searchValue = document.getElementById('searchInput').value;
                     console.log('Search submitted:', searchValue);
-                
+                    browser.lastSearch = { type: 'text', query: searchValue };                
                     browser.searchText(searchValue).then(() => {
                         browser.startGame();
                     }).catch(error => {
@@ -1526,6 +1575,7 @@
                         event.preventDefault();
                         const searchValue = this.value;
                         console.log('Search submitted:', searchValue);
+                        browser.lastSearch = { type: 'text', query: searchValue };
                         browser.searchText(searchValue).then(() => {
                             browser.startGame();
                         }).catch(error => {
@@ -1538,6 +1588,7 @@
                     event.preventDefault();
                     const searchValue = document.getElementById('searchBar').value;
                     console.log('Search submitted:', searchValue);
+                    browser.lastSearch = { type: 'text', query: searchValue };
                     browser.searchText(searchValue).then(() => {
                         browser.startGame();
                     }).catch(error => {

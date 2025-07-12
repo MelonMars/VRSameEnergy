@@ -10,6 +10,7 @@ import os
 from PIL import Image
 import hashlib
 import io
+
 app = FastAPI()
 
 app.add_middleware(
@@ -56,6 +57,8 @@ def search_images(text: str = Query(..., min_length=1), top_k: int = 2, page: in
         sorted_indices = similarities.argsort(descending=True).cpu().tolist()
 
     start_index = page * top_k
+    if start_index >= len(sorted_indices):
+        return {"images": []}
     end_index = start_index + top_k
     paginated_indices = sorted_indices[start_index:end_index]
 
@@ -77,6 +80,8 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = 3, page: in
     sorted_indices = similarities.argsort(descending=True).cpu().tolist()
 
     start_index = page * top_k
+    if start_index >= len(sorted_indices):
+        return {"images": []}
     end_index = start_index + top_k
     paginated_indices = sorted_indices[start_index:end_index]
 
@@ -110,6 +115,8 @@ async def search_by_images_blend(files: List[UploadFile] = File(...), top_k: int
     sorted_indices = similarities.argsort(descending=True).cpu().tolist()
 
     start_index = page * top_k
+    if start_index >= len(sorted_indices):
+        return {"images": []}
     end_index = start_index + top_k
     paginated_indices = sorted_indices[start_index:end_index]
 
@@ -156,6 +163,8 @@ async def search_blend(
     sorted_indices = similarities.argsort(descending=True).cpu().tolist()
 
     start_index = page * top_k
+    if start_index >= len(sorted_indices):
+        return {"images": []}
     end_index = start_index + top_k
     paginated_indices = sorted_indices[start_index:end_index]
 
