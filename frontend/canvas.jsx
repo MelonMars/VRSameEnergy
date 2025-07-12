@@ -18,6 +18,9 @@ const CanvasEditor = () => {
   const saveTimeoutRef = useRef(null);
   const hasLoaded = useRef(false)
   const [snapLines, setSnapLines] = useState([]);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [pngBackgroundType, setPngBackgroundType] = useState('transparent');
+  const [pngBackgroundColor, setPngBackgroundColor] = useState('#ffffff');
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -682,6 +685,10 @@ const CanvasEditor = () => {
     };
   }, [viewport, undo, copyLayer, deleteLayer, duplicateLayer, handlePaste]);
 
+  const downloadProject = () => {
+    setDownloadModalOpen(true);
+  }
+
   useEffect(() => {
     renderCanvas();
   }, [renderCanvas]);
@@ -824,6 +831,13 @@ const CanvasEditor = () => {
               </svg>
               Undo
             </button>
+            <button
+              onClick={downloadProject}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download-icon lucide-download"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>
+              Download
+            </button>
           </div>
           
           <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
@@ -898,6 +912,215 @@ const CanvasEditor = () => {
           )}
         </div>
       </div>
+      {downloadModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+            <h2 className="text-lg font-semibold mb-4">Download Project</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Would you like to download as PNG or JSON? The PNG will include all visible layers merged together, while the JSON will save the current state of the canvas including all layers and their properties.
+            </p>
+            
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                PNG Background:
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="background"
+                    value="transparent"
+                    checked={pngBackgroundType === 'transparent'}
+                    onChange={(e) => setPngBackgroundType(e.target.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">Transparent</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="background"
+                    value="colored"
+                    checked={pngBackgroundType === 'colored'}
+                    onChange={(e) => setPngBackgroundType(e.target.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">Colored background</span>
+                </label>
+              </div>
+              
+              {pngBackgroundType === 'colored' && (
+                <div className="mt-3 flex items-center gap-2">
+                  <label className="text-sm text-gray-600">Color:</label>
+                  <input
+                    type="color"
+                    value={pngBackgroundColor}
+                    onChange={(e) => setPngBackgroundColor(e.target.value)}
+                    className="w-8 h-8 border rounded cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-500">{pngBackgroundColor}</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDownloadModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const padding = 20;
+                  const canvas = canvasRef.current;
+                  if (!canvas) return;
+
+                  const ctx = canvas.getContext('2d');
+                  const visibleLayers = layers.filter(layer => layer.visible);
+
+                  if (visibleLayers.length === 0) return;
+
+                  const minX = Math.min(...visibleLayers.map(layer => layer.x)) - padding;
+                  const minY = Math.min(...visibleLayers.map(layer => layer.y)) - padding;
+                  const maxX = Math.max(...visibleLayers.map(layer => layer.x + layer.width)) + padding;
+                  const maxY = Math.max(...visibleLayers.map(layer => layer.y + layer.height)) + padding;
+
+                  const exportWidth = maxX - minX;
+                  const exportHeight = maxY - minY;
+
+                  const exportCanvas = document.createElement('canvas');
+                  exportCanvas.width = exportWidth;
+                  exportCanvas.height = exportHeight;
+                  const exportCtx = exportCanvas.getContext('2d');
+
+                  exportCtx.clearRect(0, 0, exportWidth, exportHeight);
+
+                  if (pngBackgroundType === 'colored') {
+                    exportCtx.fillStyle = pngBackgroundColor;
+                    exportCtx.fillRect(0, 0, exportWidth, exportHeight);
+                  }
+
+                  visibleLayers.forEach(layer => {
+                    exportCtx.drawImage(
+                      layer.image,
+                      layer.x - minX,
+                      layer.y - minY,
+                      layer.width,
+                      layer.height
+                    );
+                  });
+
+                  const dataUrl = exportCanvas.toDataURL('image/png');
+                  const a = document.createElement('a');
+                  a.download = 'canvas-project.png';
+                  a.href = dataUrl;
+                  a.click();
+                  setDownloadModalOpen(false);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-image-icon lucide-file-image">
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                  <circle cx="10" cy="12" r="2"/>
+                  <path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22"/>
+                </svg>
+                PNG
+              </button>
+
+              <button
+                onClick={async () => {
+                  setDownloadModalOpen(false);
+                  
+                  const convertToDataUrl = (url) => {
+                    return new Promise((resolve, reject) => {
+                      const img = new Image();
+                      img.crossOrigin = 'anonymous';
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        resolve(canvas.toDataURL('image/png'));
+                      };
+                      img.onerror = () => {
+                        console.warn(`Failed to load image: ${url}`);
+                        resolve(null);
+                      };
+                      img.src = url;
+                    });
+                  };
+
+                  const layersWithEmbeddedImages = await Promise.all(
+                    layers.map(async (layer) => {
+                      const layerCopy = { ...layer };
+                      
+                      if (layer.imageUrl) {
+                        try {
+                          const dataUrl = await convertToDataUrl(layer.imageUrl);
+                          layerCopy.imageDataUrl = dataUrl;
+                        } catch (error) {
+                          console.warn(`Failed to convert imageUrl for layer ${layer.id}:`, error);
+                        }
+                      }
+                      
+                      if (layer.originalImageUrl && layer.originalImageUrl !== layer.imageUrl) {
+                        try {
+                          const originalDataUrl = await convertToDataUrl(layer.originalImageUrl);
+                          layerCopy.originalImageDataUrl = originalDataUrl;
+                        } catch (error) {
+                          console.warn(`Failed to convert originalImageUrl for layer ${layer.id}:`, error);
+                        }
+                      } else if (layer.originalImageUrl === layer.imageUrl && layerCopy.imageDataUrl) {
+                        layerCopy.originalImageDataUrl = layerCopy.imageDataUrl;
+                      }
+                      
+                      return layerCopy;
+                    })
+                  );
+
+                  const exportData = {
+                    layers: layersWithEmbeddedImages,
+                    viewport,
+                    exportInfo: {
+                      timestamp: new Date().toISOString(),
+                      version: '1.0',
+                      includesEmbeddedImages: true
+                    }
+                  };
+
+                  const json = JSON.stringify(exportData, null, 2);
+                  const blob = new Blob([json], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'canvas-project.json';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-cog-icon lucide-file-cog">
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                  <path d="m2.305 15.53.923-.382"/>
+                  <path d="m3.228 12.852-.924-.383"/>
+                  <path d="M4.677 21.5a2 2 0 0 0 1.313.5H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v2.5"/>
+                  <path d="m4.852 11.228-.383-.923"/>
+                  <path d="m4.852 16.772-.383.924"/>
+                  <path d="m7.148 11.228.383-.923"/>
+                  <path d="m7.53 17.696-.382-.924"/>
+                  <path d="m8.772 12.852.923-.383"/>
+                  <path d="m8.772 15.148.923.383"/>
+                  <circle cx="6" cy="14" r="3"/>
+                </svg>
+                JSON
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <input
         ref={fileInputRef}
