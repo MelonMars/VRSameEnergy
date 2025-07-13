@@ -22,6 +22,10 @@ const CanvasEditor = () => {
   const [pngBackgroundType, setPngBackgroundType] = useState('transparent');
   const [pngBackgroundColor, setPngBackgroundColor] = useState('#ffffff');
   const [uploadProjectModalOpen, setUploadProjectModalOpen] = useState(false);
+  const [markerOptions, setMarkerOptions] = useState({ color: '#000000', strokeWidth: 5 });
+  const [isMarkerModalOpen, setIsMarkerModalOpen] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingPoints, setDrawingPoints] = useState([]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -56,6 +60,10 @@ const CanvasEditor = () => {
   useEffect(() => {
     console.log("Current layers:", layers);
   }, [layers]);
+
+  useEffect(() => {
+    console.log("Is drawing modified:", isDrawing);
+  }, [isDrawing]);
 
   useEffect(() => {
     if (hasLoaded.current) return
@@ -333,7 +341,11 @@ const CanvasEditor = () => {
   const handleMouseDown = useCallback((e) => {
     const canvasPos = screenToCanvas(e.clientX, e.clientY);
     
-    if (tool === 'move') {
+    if (tool === 'marker') {
+      console.log("Starting marker drawing at position:", canvasPos);
+      setIsDrawing(true);
+      setDrawingPoints([canvasPos]);
+    } else if (tool === 'move') {
       const layer = getLayerAtPosition(canvasPos.x, canvasPos.y);
       if (layer) {
         if (!e.shiftKey) {
@@ -357,10 +369,16 @@ const CanvasEditor = () => {
 
   const handleMouseMove = useCallback((e) => {
     const canvasPos = screenToCanvas(e.clientX, e.clientY);
-    const snapThreshold = 10 / viewport.scale;
-    const gridSize = 50;
-
+    
+    if (isDrawing && tool === 'marker') {
+      setDrawingPoints(prev => [...prev, canvasPos]);
+      return;
+    }
+    
     if (isDragging && tool === 'move') {
+        const snapThreshold = 10 / viewport.scale;
+        const gridSize = 50;
+
         if (selectedLayer) {
             let newX = canvasPos.x - dragStart.x;
             let newY = canvasPos.y - dragStart.y;
@@ -394,7 +412,6 @@ const CanvasEditor = () => {
                 setSnapLines(newSnapLines);
             }
 
-
             setLayers(prev => prev.map(layer =>
                 layer.id === selectedLayer
                     ? { ...layer, x: newX, y: newY }
@@ -410,9 +427,46 @@ const CanvasEditor = () => {
     } else if (cropMode && tool === 'crop') {
         setCropEnd(canvasPos);
     }
-}, [isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers]);
+  }, [isDrawing, isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers]);
 
   const handleMouseUp = useCallback(() => {
+    if (isDrawing && tool === 'marker' && drawingPoints.length > 1) {
+      const padding = markerOptions.strokeWidth;
+      const minX = Math.min(...drawingPoints.map(p => p.x)) - padding;
+      const minY = Math.min(...drawingPoints.map(p => p.y)) - padding;
+      const maxX = Math.max(...drawingPoints.map(p => p.x)) + padding;
+      const maxY = Math.max(...drawingPoints.map(p => p.y)) + padding;
+
+      const width = maxX - minX;
+      const height = maxY - minY;
+      
+      const drawingCanvas = document.createElement('canvas');
+      drawingCanvas.width = width;
+      drawingCanvas.height = height;
+      const ctx = drawingCanvas.getContext('2d');
+      
+      ctx.strokeStyle = markerOptions.color;
+      ctx.lineWidth = markerOptions.strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(drawingPoints[0].x - minX, drawingPoints[0].y - minY);
+      for (let i = 1; i < drawingPoints.length; i++) {
+          ctx.lineTo(drawingPoints[i].x - minX, drawingPoints[i].y - minY);
+      }
+      ctx.stroke();
+
+      const newImage = new Image();
+      newImage.onload = () => {
+          addLayer(newImage, minX, minY, true);
+      };
+      newImage.src = drawingCanvas.toDataURL();
+    }
+    
+    setIsDrawing(false);
+    setDrawingPoints([]);
+
     if (isDragging && tool === 'move' && selectedLayer) {
       saveToHistory();
     }
@@ -451,7 +505,7 @@ const CanvasEditor = () => {
       setCropStart(null);
       setCropEnd(null);
     }
-  }, [isDragging, tool, selectedLayer, cropMode, cropStart, cropEnd, layers, saveToHistory, addLayer, createHoleInLayer]);
+  }, [isDrawing, drawingPoints, markerOptions, isDragging, tool, selectedLayer, cropMode, cropStart, cropEnd, layers, saveToHistory, addLayer, createHoleInLayer]);
 
   const copyLayer = useCallback(async () => {
     if (selectedLayer) {
@@ -587,6 +641,20 @@ const CanvasEditor = () => {
       }
     });
     
+    if (isDrawing && tool === 'marker' && drawingPoints.length > 1) {
+      ctx.strokeStyle = markerOptions.color;
+      ctx.lineWidth = markerOptions.strokeWidth / viewport.scale;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.beginPath();
+      ctx.moveTo(drawingPoints[0].x, drawingPoints[0].y);
+      for (let i = 1; i < drawingPoints.length; i++) {
+          ctx.lineTo(drawingPoints[i].x, drawingPoints[i].y);
+      }
+      ctx.stroke();
+    }
+
     if (snapLines.length > 0) {
       ctx.strokeStyle = '#ff00ff';
       ctx.lineWidth = 1 / viewport.scale;
@@ -605,7 +673,7 @@ const CanvasEditor = () => {
       });
 
       ctx.setLineDash([]);
-  }
+    }
 
     if (cropMode && cropStart && cropEnd) {
       ctx.strokeStyle = '#ef4444';
@@ -620,7 +688,7 @@ const CanvasEditor = () => {
     }
     
     ctx.restore();
-  }, [layers, selectedLayer, viewport, cropMode, cropStart, cropEnd]);
+  }, [layers, selectedLayer, viewport, cropMode, cropStart, cropEnd, isDrawing, tool, drawingPoints, markerOptions, snapLines]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -786,9 +854,25 @@ const CanvasEditor = () => {
               </svg>
               Crop & Excise
             </button>
+            <button
+              onClick={() => setTool('marker')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                tool === 'marker' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen-icon lucide-pen"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
+              Marker
+            </button>
           </div>
           
           <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+          <button
+              onClick={() => setIsMarkerModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              Marker Options
+          </button>
             <button
               onClick={copyLayer}
               disabled={!selectedLayer}
@@ -1257,6 +1341,45 @@ const CanvasEditor = () => {
           </div>
         </div>
       )}
+      {isMarkerModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+                <h2 className="text-lg font-semibold mb-4">Marker Options</h2>
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Marker Color:
+                    </label>
+                    <input
+                        type="color"
+                        value={markerOptions.color}
+                        onChange={(e) => setMarkerOptions(prev => ({ ...prev, color: e.target.value }))}
+                        className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
+                    />
+                </div>
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Stroke Width: {markerOptions.strokeWidth}
+                    </label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        value={markerOptions.strokeWidth}
+                        onChange={(e) => setMarkerOptions(prev => ({ ...prev, strokeWidth: parseInt(e.target.value, 10) }))}
+                        className="w-full"
+                    />
+                </div>
+                <div className="flex justify-end">
+                    <button
+                        onClick={() => setIsMarkerModalOpen(false)}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    )}
       <input
         ref={fileInputRef}
         type="file"
