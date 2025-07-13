@@ -26,6 +26,7 @@ const CanvasEditor = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState([]);
   const [showGrid, setShowGrid] = useState(true);
+  const drawingCanvasRef = useRef(null);
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -56,10 +57,6 @@ const CanvasEditor = () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [layers, viewport]);
-
-  useEffect(() => {
-    console.log("Current layers:", layers);
-  }, [layers]);
 
   useEffect(() => {
     console.log("Is drawing modified:", isDrawing);
@@ -341,7 +338,26 @@ const CanvasEditor = () => {
   const handleMouseDown = useCallback((e) => {
     const canvasPos = screenToCanvas(e.clientX, e.clientY);
     
-    if (tool === 'marker') {
+    if (tool === 'eraser' ) {
+      const layer = getLayerAtPosition(canvasPos.x, canvasPos.y);
+      if (layer) {
+        setIsDrawing(true);
+
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = layer.image.width;
+        offscreenCanvas.height = layer.image.height;
+        const offscreenCtx = offscreenCanvas.getContext('2d');
+        offscreenCtx.drawImage(layer.image, 0, 0);
+        drawingCanvasRef.current = { canvas: offscreenCanvas, layerId: layer.id };
+
+        const eraserSize = 10;
+        const x = canvasPos.x - layer.x;
+        const y = canvasPos.y - layer.y;
+        offscreenCtx.clearRect(x - eraserSize / 2, y - eraserSize / 2, eraserSize, eraserSize);
+
+        renderCanvas();
+      }
+    } else if (tool === 'marker') {
       console.log("Starting marker drawing at position:", canvasPos);
       setIsDrawing(true);
       setDrawingPoints([canvasPos]);
@@ -426,11 +442,38 @@ const CanvasEditor = () => {
         }
     } else if (cropMode && tool === 'crop') {
         setCropEnd(canvasPos);
+    } else if (tool === 'eraser' && isDrawing && drawingCanvasRef.current) {
+      const { canvas, layerId } = drawingCanvasRef.current;
+      const layer = layers.find(l => l.id === layerId);
+      if (layer) {
+          const ctx = canvas.getContext('2d');
+          const eraserSize = 10;
+          const x = canvasPos.x - layer.x;
+          const y = canvasPos.y - layer.y;
+          ctx.clearRect(x - eraserSize / 2, y - eraserSize / 2, eraserSize, eraserSize);
+      }
+      return;
     }
   }, [isDrawing, isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers, showGrid]);
 
   const handleMouseUp = useCallback(() => {
-    if (isDrawing && tool === 'marker' && drawingPoints.length > 1) {
+    if (isDrawing && tool === 'eraser' && drawingCanvasRef.current) {
+      const { canvas, layerId } = drawingCanvasRef.current;
+
+      const newImage = new Image();
+      newImage.onload = () => {
+        saveToHistory();
+        setLayers(prev =>
+          prev.map(l =>
+            l.id === layerId
+              ? { ...l, image: newImage, name: l.name.replace(' (Erased)', '') + ' (Erased)' }
+              : l
+          )
+        );
+        drawingCanvasRef.current = null;
+      };
+      newImage.src = canvas.toDataURL();
+    } else if (isDrawing && tool === 'marker' && drawingPoints.length > 1) {
       const padding = markerOptions.strokeWidth;
       const minX = Math.min(...drawingPoints.map(p => p.x)) - padding;
       const minY = Math.min(...drawingPoints.map(p => p.y)) - padding;
@@ -621,7 +664,11 @@ const CanvasEditor = () => {
     
     layers.forEach(layer => {
       if (layer.visible) {
-        ctx.drawImage(layer.image, layer.x, layer.y, layer.width, layer.height);
+        if (isDrawing && tool === 'eraser' && drawingCanvasRef.current?.layerId === layer.id) {
+          ctx.drawImage(drawingCanvasRef.current.canvas, layer.x, layer.y);
+        } else {
+          ctx.drawImage(layer.image, layer.x, layer.y, layer.width, layer.height);
+        }
         
         if (layer.id === selectedLayer) {
           ctx.strokeStyle = '#2563eb';
@@ -864,6 +911,14 @@ const CanvasEditor = () => {
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen-icon lucide-pen"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
               Marker
+            </button>
+            <button
+              onClick={() => setTool('eraser')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                tool === 'eraser' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eraser-icon lucide-eraser"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg>
             </button>
             {tool == 'marker' && (<div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
