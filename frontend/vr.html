@@ -519,6 +519,7 @@
                         increaseSpeed: 'Increase Speed',
                         decreaseSpeed: 'Decrease Speed'
                     }
+                    this.backend = 'http://127.0.0.1:8000'
 
                     this.init();
                     this.setupEventListeners();
@@ -836,7 +837,7 @@
                     const formData = new FormData();
                     formData.append("file", image);
 
-                    const response = await fetch("http://127.0.0.1:8000/search_image/?top_k=2", {
+                    const response = await fetch(`${this.backend}/search_image/?top_k=2`, {
                         method: "POST",
                         body: formData,
                     });
@@ -848,7 +849,7 @@
                     const data = await response.json();
 
                     if (data && Array.isArray(data.images) && data.images.length > 0) {
-                        this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                        this.backendImages = data.images.map(img => `${this.backend}${img}`);
                         console.log(`Fetched and cached ${this.backendImages.length} images from image search`);
                     } else {
                         console.error('No images found or invalid format from backend.');
@@ -870,12 +871,12 @@
                     switch (this.lastSearch.type) {
                         case 'text':
                             console.log(`Fetching text search results for query: "${this.lastSearch.query}"`);
-                            url = `http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(this.lastSearch.query)}&top_k=${topK}&page=${this.currentPage}`;
+                            url = `${this.backend}/search_text/?text=${encodeURIComponent(this.lastSearch.query)}&top_k=${topK}&page=${this.currentPage}`;
                             break;
                         case 'multi':
                             console.log(`Fetching multi-text search results for queries: ${this.lastSearch.query.join(', ')}`);
                             const termsQuery = this.lastSearch.query.map(t => `texts=${encodeURIComponent(t)}`).join('&');
-                            url = `http://127.0.0.1:8000/search_multi_text/?${termsQuery}&top_k=${topK}&page=${this.currentPage}`;
+                            url = `${this.backend}/search_multi_text/?${termsQuery}&top_k=${topK}&page=${this.currentPage}`;
                             break;
                         default:
                             console.warn('Unknown search type. Aborting fetchPaginatedImages.');
@@ -901,7 +902,7 @@
     
                         if (data && Array.isArray(data.images) && data.images.length > 0) {
                             console.log(`Fetched ${data.images.length} new images.`);
-                            const newImageUrls = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                            const newImageUrls = data.images.map(img => `${this.backend}${img}`);
                             this.backendImages.push(...newImageUrls);
                             this.backendImages = [...new Set(this.backendImages)]; 
                             console.log(`Total images in backendImages: ${this.backendImages.length}`);
@@ -988,7 +989,7 @@
                         formData.append("files", file);
                     });
                 
-                    const response = await fetch("http://127.0.0.1:8000/search_blend/?top_k=2", {
+                    const response = await fetch(`${this.backend}/search_blend/?top_k=2`, {
                         method: "POST",
                         body: formData,
                     });
@@ -1000,7 +1001,7 @@
                     const data = await response.json();
                 
                     if (data && Array.isArray(data.images) && data.images.length > 0) {
-                        this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                        this.backendImages = data.images.map(img => `${this.backend}${img}`);
                         console.log(`Fetched ${this.backendImages.length} images from blend search`);
                     } else {
                         console.error('No images found or invalid format from backend.');
@@ -1026,14 +1027,14 @@
                         this.backendImages = this.searchCache.get(searchTerm);
                         console.log(`Using cached results for "${searchTerm}"`);
                     } else {
-                        const response = await fetch(`http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
+                        const response = await fetch(`${this.backend}/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
                         if (!response.ok) {
                             throw new Error(`HTTP error! status: ${response.status}`);
                         }
                         const data = await response.json();
                         
                         if (data && Array.isArray(data.images) && data.images.length > 0) {
-                            this.backendImages = data.images.map(img => `http://127.0.0.1:8000${img}`);
+                            this.backendImages = data.images.map(img => `${this.backend}${img}`);
                             this.searchCache.set(searchTerm, this.backendImages);
                             console.log(`Fetched and cached ${this.backendImages.length} images for "${searchTerm}"`);
                         } else {
@@ -1051,14 +1052,14 @@
                         const cachedImages = this.searchCache.get(searchTerm);
                         this.backendImages.push(...cachedImages);
                     } else {
-                        const response = await fetch(`http://127.0.0.1:8000/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
+                        const response = await fetch(`${this.backend}/search_text/?text=${encodeURIComponent(searchTerm)}&top_k=2`);
                         if (!response.ok) {
                             throw new Error(`HTTP error! status: ${response.status}`);
                         }
                         const data = await response.json();
 
                         if (data && Array.isArray(data.images) && data.images.length > 0) {
-                            this.backendImages.push(...data.images.map(img => `http://127.0.0.1:8000${img}`));
+                            this.backendImages.push(...data.images.map(img => `${this.backend}${img}`));
                             this.searchCache.set(searchTerm, this.backendImages);
                             console.log(`Fetched and cached ${data.images.length} images for "${searchTerm}"`);
                         } else {
@@ -1512,7 +1513,14 @@
                                     <input type="checkbox" id="toggle2D" ${this.twodmode ? 'checked' : ''} style="margin-right: 10px; transform: scale(1.2);">
                                     Enable 2D Mode
                                 </label>
-                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="backendInput">
+                                        Backend URL:
+                                    </label>
+                                    <input type="text" id="backendInput" value="${this.backend}" 
+                                           style="width: 100%; padding: 8px; border: 1px solid #444; border-radius: 4px; background: #333; color: #fff; font-size: 14px;">
+                                    </input>
+                                </div>
                                 <div style="margin-bottom: 15px;">
                                     <label for="speedSlider" style="display: block; margin-bottom: 8px; font-size: 16px;">3D Speed: <span id="speedValue">${this.speed}</span></label>
                                     <input type="range" id="speedSlider" min="0.3" max="3.0" step="0.1" value="${this.speed}" 
