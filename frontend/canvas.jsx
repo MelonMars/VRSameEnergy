@@ -25,6 +25,7 @@ const CanvasEditor = () => {
   const [markerOptions, setMarkerOptions] = useState({ color: '#000000', strokeWidth: 5 });
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState([]);
+  const [showGrid, setShowGrid] = useState(true);
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -383,7 +384,7 @@ const CanvasEditor = () => {
             let newY = canvasPos.y - dragStart.y;
             const currentLayer = layers.find(l => l.id === selectedLayer);
             
-            if (currentLayer) {
+            if (currentLayer && showGrid) { 
                 const layerEdges = {
                     x: [newX, newX + currentLayer.width / 2, newX + currentLayer.width],
                     y: [newY, newY + currentLayer.height / 2, newY + currentLayer.height]
@@ -426,7 +427,7 @@ const CanvasEditor = () => {
     } else if (cropMode && tool === 'crop') {
         setCropEnd(canvasPos);
     }
-  }, [isDrawing, isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers]);
+  }, [isDrawing, isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers, showGrid]);
 
   const handleMouseUp = useCallback(() => {
     if (isDrawing && tool === 'marker' && drawingPoints.length > 1) {
@@ -586,34 +587,36 @@ const CanvasEditor = () => {
     ctx.translate(viewport.x, viewport.y);
     ctx.scale(viewport.scale, viewport.scale);
     
-    const checkerSize = 20;
-    const startX = Math.floor(-viewport.x / viewport.scale / checkerSize) * checkerSize;
-    const startY = Math.floor(-viewport.y / viewport.scale / checkerSize) * checkerSize;
-    const endX = startX + (canvas.width / viewport.scale) + checkerSize;
-    const endY = startY + (canvas.height / viewport.scale) + checkerSize;
-    
-    for (let x = startX; x < endX; x += checkerSize) {
-      for (let y = startY; y < endY; y += checkerSize) {
-        ctx.fillStyle = ((x / checkerSize) + (y / checkerSize)) % 2 === 0 ? '#f0f0f0' : '#e0e0e0';
-        ctx.fillRect(x, y, checkerSize, checkerSize);
+    if (showGrid) {
+      const checkerSize = 20;
+      const startX = Math.floor(-viewport.x / viewport.scale / checkerSize) * checkerSize;
+      const startY = Math.floor(-viewport.y / viewport.scale / checkerSize) * checkerSize;
+      const endX = startX + (canvas.width / viewport.scale) + checkerSize;
+      const endY = startY + (canvas.height / viewport.scale) + checkerSize;
+      
+      for (let x = startX; x < endX; x += checkerSize) {
+        for (let y = startY; y < endY; y += checkerSize) {
+          ctx.fillStyle = ((x / checkerSize) + (y / checkerSize)) % 2 === 0 ? '#f0f0f0' : '#e0e0e0';
+          ctx.fillRect(x, y, checkerSize, checkerSize);
+        }
       }
-    }
-    
-    ctx.strokeStyle = '#d0d0d0';
-    ctx.lineWidth = 1 / viewport.scale;
-    const gridSize = 50;
-    
-    for (let x = startX; x < endX; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, startY);
-      ctx.lineTo(x, endY);
-      ctx.stroke();
-    }
-    for (let y = startY; y < endY; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(startX, y);
-      ctx.lineTo(endX, y);
-      ctx.stroke();
+      
+      ctx.strokeStyle = '#d0d0d0';
+      ctx.lineWidth = 1 / viewport.scale;
+      const gridSize = 50;
+      
+      for (let x = startX; x < endX; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+        ctx.stroke();
+      }
+      for (let y = startY; y < endY; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+        ctx.stroke();
+      }
     }
     
     layers.forEach(layer => {
@@ -687,7 +690,7 @@ const CanvasEditor = () => {
     }
     
     ctx.restore();
-  }, [layers, selectedLayer, viewport, cropMode, cropStart, cropEnd, isDrawing, tool, drawingPoints, markerOptions, snapLines]);
+  }, [layers, selectedLayer, viewport, cropMode, cropStart, cropEnd, isDrawing, tool, drawingPoints, markerOptions, snapLines, showGrid]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -991,6 +994,17 @@ const CanvasEditor = () => {
           <div className="text-sm text-gray-600 border-l border-gray-200 pl-4">
             Layers: {layers.length} | Selected: {selectedLayer ? 'Yes' : 'None'}
             {isProcessing && <span className="text-blue-600"> | Processing...</span>}
+          </div>
+          <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+            <input
+              type="checkbox"
+              checked={showGrid}
+              onChange={(e) => {
+                setShowGrid(e.target.checked)
+              }}
+              className="cursor-pointer"
+            />
+            <label className="text-sm text-gray-600 cursor-pointer">Show Grid</label>
           </div>
         </div>
         
