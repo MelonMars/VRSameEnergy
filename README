@@ -1,0 +1,7 @@
+VR INSPIRATION BOARD
+
+This is a project to make an inspiration board based on images flying at you in 3d space, created by asking CLIP from OpenAI to label some images.
+
+To run, go to ``. you can then go to the canvas, which will already work offline. You will need to run the backend yourself, due to problems hosting it on VMs (DigitalOcean would just kill it whenever I tried to run it).
+
+To run the backend, `cd` to the `backend`, and then run `pip install -r requirements.txt` and then take all the images you want and place them into the `backend/images/` directory. Then run `python label.py` and then, to run the server, run `uvicorn search:app`. You will then see `INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)` (or something similar). Take the URL (in this case, `http://127.0.0.1:8000`), go to the settings of the VR, (press the cog icon or `s`) and then set the backend url to this. This will only work if you don't use a local url though, so DO NOT use something like `127.0.0.1`. Use something like `ngrok` if you have to (though it tends to be too slow).
