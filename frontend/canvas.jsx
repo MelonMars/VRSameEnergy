@@ -27,6 +27,11 @@ const CanvasEditor = () => {
   const [drawingPoints, setDrawingPoints] = useState([]);
   const [showGrid, setShowGrid] = useState(true);
   const drawingCanvasRef = useRef(null);
+  const [contextMenu, setContextMenu] = useState({
+    x: 0,
+    y: 0,
+    layerId: null
+  });
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -336,6 +341,14 @@ const CanvasEditor = () => {
   }, []);
 
   const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0) {
+      return;
+    }
+
+    if (contextMenu.layerId) {
+      setContextMenu({ x: 0, y: 0, layerId: null });
+    }
+
     const canvasPos = screenToCanvas(e.clientX, e.clientY);
     
     if (tool === 'eraser' ) {
@@ -815,6 +828,23 @@ const CanvasEditor = () => {
     renderCanvas();
   }, [renderCanvas]);
 
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+    const canvasPos = screenToCanvas(e.clientX, e.clientY);
+    const layer = getLayerAtPosition(canvasPos.x, canvasPos.y);
+
+    if (layer) {
+      setSelectedLayer(layer.id);
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        layerId: layer.id,
+      });
+    } else {
+      setContextMenu({ x: 0, y: 0, layerId: null });
+    }
+  }, [screenToCanvas, getLayerAtPosition, layers]);
+
   return (
     <div className="w-full h-screen bg-gray-100 flex">
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
@@ -829,6 +859,14 @@ const CanvasEditor = () => {
                 layer.id === selectedLayer ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50'
               }`}
               onClick={() => setSelectedLayer(layer.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  layerId: layer.id
+                });
+              }}    
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1075,6 +1113,7 @@ const CanvasEditor = () => {
             onDrop={handleDrop}
             onDragEnter={(e) => e.preventDefault()}
             onDragOver={(e) => e.preventDefault()}
+            onContextMenu={handleContextMenu}
           />
           
           {layers.length === 0 && (
@@ -1423,6 +1462,65 @@ const CanvasEditor = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {contextMenu.layerId && (
+        <div
+          className="fixed z-50 bg-white border border-gray-200 rounded shadow-lg p-2"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseLeave={() => setContextMenu({})}
+        >
+          <button
+            className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            onClick={() => {
+              toggleLayerVisibility(contextMenu.layerId);
+              setContextMenu({});
+            }}
+          >
+            {layers.find(layer => layer.id === contextMenu.layerId)?.visible ? 
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye-off mr-2">
+                <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/>
+                <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/>
+                <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/>
+                <path d="m2 2 20 20"/>
+              </svg> : 
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye mr-2">
+                <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            }
+            Toggle Visibility
+          </button>
+          <button
+            className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            onClick={() => {
+              copyLayer(contextMenu.layerId);
+              setContextMenu({});
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy-icon lucide-copy mr-2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copy Layer
+          </button>
+          <button
+            className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            onClick={() => {
+              duplicateLayer(contextMenu.layerId);
+              setContextMenu({});
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layers2-icon lucide-layers-2 mr-2"><path d="M13 13.74a2 2 0 0 1-2 0L2.5 8.87a1 1 0 0 1 0-1.74L11 2.26a2 2 0 0 1 2 0l8.5 4.87a1 1 0 0 1 0 1.74z"/><path d="m20 14.285 1.5.845a1 1 0 0 1 0 1.74L13 21.74a2 2 0 0 1-2 0l-8.5-4.87a1 1 0 0 1 0-1.74l1.5-.845"/></svg>
+            Duplicate Layer
+          </button>
+          <button
+            className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-100"
+            onClick={() => {
+              deleteLayer(contextMenu.layerId);
+              setContextMenu({});
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-icon lucide-trash mr-2"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete Layer
+          </button>
         </div>
       )}
       <input
