@@ -32,19 +32,6 @@ const CanvasEditor = () => {
     y: 0,
     layerId: null
   });
-  const [editingLayerId, setEditingLayerId] = useState(null);
-  const textAreaRef = useRef(null);
-
-  useEffect(() => {
-    if (editingLayerId && textAreaRef.current) {
-        const el = textAreaRef.current;
-        el.focus();
-        el.style.height = 'auto';
-        el.style.width = 'auto';
-        el.style.height = `${el.scrollHeight}px`;
-        el.style.width = `${el.scrollWidth}px`;
-    }
-  }, [editingLayerId, layers]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) {
@@ -320,25 +307,13 @@ const CanvasEditor = () => {
   }, [loadImage, addLayer]);
 
   const getLayerAtPosition = useCallback((x, y) => {
-    const measureCtx = document.createElement('canvas').getContext('2d');
-
     for (let i = layers.length - 1; i >= 0; i--) {
-        const layer = layers[i];
-        let bounds = { x: layer.x, y: layer.y, width: 0, height: 0 };
-
-        if (layer.type === 'text') {
-            measureCtx.font = `${layer.fontSize}px ${layer.fontFamily}`;
-            const metrics = measureCtx.measureText(layer.content);
-            bounds.width = metrics.width;
-            bounds.height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-        } else {
-            bounds.width = layer.width;
-            bounds.height = layer.height;
-        }
-      
-        if (layer.visible && x >= bounds.x && x <= bounds.x + bounds.width && y >= bounds.y && y <= bounds.y + bounds.height) {
-            return layer;
-        }
+      const layer = layers[i];
+      if (layer.visible && 
+          x >= layer.x && x <= layer.x + layer.width &&
+          y >= layer.y && y <= layer.y + layer.height) {
+        return layer;
+      }
     }
     return null;
   }, [layers]);
@@ -376,32 +351,12 @@ const CanvasEditor = () => {
 
     const canvasPos = screenToCanvas(e.clientX, e.clientY);
     
-    if (tool === 'text') {
-      if (editingLayerId) {
-          setEditingLayerId(null);
-      }
-      const canvasPos = screenToCanvas(e.clientX, e.clientY);
-      addTextLayer(canvasPos.x, canvasPos.y);
-      return;
-    }  
     if (tool === 'eraser' ) {
-      const layer = getLayerAtPosition(canvasPos.x, canvasPos.y);
-      if (layer) {
-        setIsDrawing(true);
-
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = layer.image.width;
-        offscreenCanvas.height = layer.image.height;
-        const offscreenCtx = offscreenCanvas.getContext('2d');
-        offscreenCtx.drawImage(layer.image, 0, 0);
-        drawingCanvasRef.current = { canvas: offscreenCanvas, layerId: layer.id };
-
-        const eraserSize = 10;
-        const x = canvasPos.x - layer.x;
-        const y = canvasPos.y - layer.y;
-        offscreenCtx.clearRect(x - eraserSize / 2, y - eraserSize / 2, eraserSize, eraserSize);
-
-        renderCanvas();
+      setIsDrawing(true);
+      const layerToDelete = getLayerAtPosition(canvasPos.x, canvasPos.y);
+      if (layerToDelete) {
+        setLayers(prev => prev.filter(l => l.id !== layerToDelete.id));
+        saveToHistory();
       }
     } else if (tool === 'marker') {
       console.log("Starting marker drawing at position:", canvasPos);
@@ -489,38 +444,20 @@ const CanvasEditor = () => {
     } else if (cropMode && tool === 'crop') {
         setCropEnd(canvasPos);
     } else if (tool === 'eraser' && isDrawing && drawingCanvasRef.current) {
-      const { canvas, layerId } = drawingCanvasRef.current;
-      const layer = layers.find(l => l.id === layerId);
-      if (layer) {
-          const ctx = canvas.getContext('2d');
-          const eraserSize = 10;
-          const x = canvasPos.x - layer.x;
-          const y = canvasPos.y - layer.y;
-          ctx.clearRect(x - eraserSize / 2, y - eraserSize / 2, eraserSize, eraserSize);
+      const layerToDelete = getLayerAtPosition(canvasPos.x, canvasPos.y);
+      if (layerToDelete) {
+        setLayers(prev => prev.filter(l => l.id !== layerToDelete.id));
       }
-      return;
     }
   }, [isDrawing, isDragging, tool, selectedLayer, dragStart, cropMode, screenToCanvas, viewport.scale, layers, showGrid]);
 
   const handleMouseUp = useCallback(() => {
     if (isDrawing && tool === 'eraser' && drawingCanvasRef.current) {
-      const { canvas, layerId } = drawingCanvasRef.current;
-
-      const newImage = new Image();
-      newImage.onload = () => {
-        saveToHistory();
-        setLayers(prev =>
-          prev.map(l =>
-            l.id === layerId
-              ? { ...l, image: newImage, name: l.name.replace(' (Erased)', '') + ' (Erased)' }
-              : l
-          )
-        );
-        drawingCanvasRef.current = null;
-      };
-      newImage.src = canvas.toDataURL();
+      saveToHistory();
     } else if (isDrawing && tool === 'marker' && drawingPoints.length > 1) {
-      const padding = markerOptions.strokeWidth;
+      const actualStrokeWidth = markerOptions.strokeWidth / viewport.scale;
+      const padding = actualStrokeWidth;
+
       const minX = Math.min(...drawingPoints.map(p => p.x)) - padding;
       const minY = Math.min(...drawingPoints.map(p => p.y)) - padding;
       const maxX = Math.max(...drawingPoints.map(p => p.x)) + padding;
@@ -535,7 +472,7 @@ const CanvasEditor = () => {
       const ctx = drawingCanvas.getContext('2d');
       
       ctx.strokeStyle = markerOptions.color;
-      ctx.lineWidth = markerOptions.strokeWidth;
+      ctx.lineWidth = actualStrokeWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       
@@ -635,24 +572,6 @@ const CanvasEditor = () => {
         }
     }, [selectedLayer, saveToHistory]);
 
-    const addTextLayer = (x, y) => {
-      saveToHistory();
-      const newLayer = {
-          id: Date.now() + Math.random(),
-          type: 'text',
-          x,
-          y,
-          content: 'Your Text',
-          fontSize: 48,
-          fontFamily: 'Arial',
-          color: '#000000',
-          visible: true,
-          name: 'Text Layer',
-      };
-      setLayers(prev => [...prev, newLayer]);
-      setSelectedLayer(newLayer.id);
-      setEditingLayerId(newLayer.id);
-  };
 
   const toggleLayerVisibility = useCallback((layerId) => {
     setLayers(prev => prev.map(layer => 
@@ -727,32 +646,17 @@ const CanvasEditor = () => {
     }
     
     layers.forEach(layer => {
-      if (layer.visible && layer.id !== editingLayerId) {
-          
-          let layerWidth, layerHeight;
-  
-          if (layer.type === 'text') {
-              ctx.font = `${layer.fontSize}px ${layer.fontFamily}`;
-              ctx.fillStyle = layer.color;
-              ctx.textAlign = 'left';
-              ctx.textBaseline = 'top';
-  
-              const metrics = ctx.measureText(layer.content);
-              layerWidth = metrics.width;
-              layerHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-              
-              ctx.fillText(layer.content, layer.x, layer.y);
-  
-          } else {
-              layerWidth = layer.width;
-              layerHeight = layer.height;
-              ctx.drawImage(layer.image, layer.x, layer.y, layer.width, layer.height);
-          }
-          
-          if (layer.id === selectedLayer) {
-              ctx.strokeStyle = '#2563eb';
-              ctx.lineWidth = 2 / viewport.scale;
-              ctx.strokeRect(layer.x, layer.y, layerWidth, layerHeight);
+      if (layer.visible) {
+        if (isDrawing && tool === 'eraser' && drawingCanvasRef.current?.layerId === layer.id) {
+          ctx.drawImage(drawingCanvasRef.current.canvas, layer.x, layer.y);
+        } else {
+          ctx.drawImage(layer.image, layer.x, layer.y, layer.width, layer.height);
+        }
+        
+        if (layer.id === selectedLayer) {
+          ctx.strokeStyle = '#2563eb';
+          ctx.lineWidth = 2 / viewport.scale;
+          ctx.strokeRect(layer.x, layer.y, layer.width, layer.height);
           
           const handleSize = 8 / viewport.scale;
           ctx.fillStyle = '#2563eb';
@@ -818,16 +722,6 @@ const CanvasEditor = () => {
     ctx.restore();
   }, [layers, selectedLayer, viewport, cropMode, cropStart, cropEnd, isDrawing, tool, drawingPoints, markerOptions, snapLines, showGrid]);
 
-  const handleDoubleClick = useCallback((e) => {
-    const canvasPos = screenToCanvas(e.clientX, e.clientY);
-    const layer = getLayerAtPosition(canvasPos.x, canvasPos.y);
-
-    if (layer && layer.type === 'text' && tool === 'move') {
-        setSelectedLayer(layer.id);
-        setEditingLayerId(layer.id);
-    }
-  }, [screenToCanvas, getLayerAtPosition, layers, tool]);
-  
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1018,15 +912,6 @@ const CanvasEditor = () => {
               Crop & Excise
             </button>
             <button
-              onClick={() => setTool('text')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                tool === 'text' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
-              }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
-              Text
-            </button>
-            <button
               onClick={() => setTool('marker')}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                 tool === 'marker' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
@@ -1199,53 +1084,8 @@ const CanvasEditor = () => {
             onDragEnter={(e) => e.preventDefault()}
             onDragOver={(e) => e.preventDefault()}
             onContextMenu={handleContextMenu}
-            onDoubleClick={handleDoubleClick}
           />
-    
-        {editingLayerId && (() => {
-              const layer = layers.find(l => l.id === editingLayerId);
-              if (!layer || layer.type !== 'text') return null;
-              
-              const screenPos = canvasToScreen(layer.x, layer.y);
-              
-              return (
-                  <textarea
-                      ref={textAreaRef}
-                      value={layer.content}
-                      onChange={(e) => {
-                          const newContent = e.target.value;
-                          setLayers(prev => prev.map(l => 
-                              l.id === editingLayerId ? { ...l, content: newContent } : l
-                          ));
-                      }}
-                      onBlur={() => setEditingLayerId(null)}
-                      onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              setEditingLayerId(null);
-                          }
-                          if (e.key === 'Escape') setEditingLayerId(null);
-                      }}
-                      autoFocus
-                      style={{
-                          position: 'absolute',
-                          top: `${screenPos.y}px`,
-                          left: `${screenPos.x}px`,
-                          fontSize: `${layer.fontSize * viewport.scale}px`,
-                          fontFamily: layer.fontFamily,
-                          color: layer.color,
-                          lineHeight: 1,
-                          background: 'rgba(255, 255, 255, 0.9)',
-                          border: '1px solid #2563eb',
-                          outline: 'none',
-                          resize: 'none',
-                          overflow: 'hidden',
-                          whiteSpace: 'pre',
-                          zIndex: 100,
-                      }}
-                  />
-              );
-          })()}
+          
           {layers.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center text-gray-500">
