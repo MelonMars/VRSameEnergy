@@ -23,7 +23,6 @@ const CanvasEditor = () => {
   const [pngBackgroundColor, setPngBackgroundColor] = useState('#ffffff');
   const [uploadProjectModalOpen, setUploadProjectModalOpen] = useState(false);
   const [markerOptions, setMarkerOptions] = useState({ color: '#000000', strokeWidth: 5 });
-  const [isMarkerModalOpen, setIsMarkerModalOpen] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState([]);
 
@@ -863,16 +862,32 @@ const CanvasEditor = () => {
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen-icon lucide-pen"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
               Marker
             </button>
+            {tool == 'marker' && (<div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Stroke Width:</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={markerOptions.strokeWidth}
+                  onChange={(e) => setMarkerOptions((prev) => ({ ...prev, strokeWidth: parseInt(e.target.value, 10) }))}
+                  className="w-24"
+                />
+                <span className="text-sm text-gray-600">{markerOptions.strokeWidth}px</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Color:</label>
+                <input
+                  type="color"
+                  value={markerOptions.color}
+                  onChange={(e) => setMarkerOptions((prev) => ({ ...prev, color: e.target.value }))}
+                  className="w-8 h-8 border rounded cursor-pointer"
+                />
+              </div>
+            </div>)}
           </div>
           
           <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
-          <button
-              onClick={() => setIsMarkerModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              Marker Options
-          </button>
             <button
               onClick={copyLayer}
               disabled={!selectedLayer}
@@ -1341,45 +1356,6 @@ const CanvasEditor = () => {
           </div>
         </div>
       )}
-      {isMarkerModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-96">
-                <h2 className="text-lg font-semibold mb-4">Marker Options</h2>
-                <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Marker Color:
-                    </label>
-                    <input
-                        type="color"
-                        value={markerOptions.color}
-                        onChange={(e) => setMarkerOptions(prev => ({ ...prev, color: e.target.value }))}
-                        className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
-                    />
-                </div>
-                <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Stroke Width: {markerOptions.strokeWidth}
-                    </label>
-                    <input
-                        type="range"
-                        min="1"
-                        max="50"
-                        value={markerOptions.strokeWidth}
-                        onChange={(e) => setMarkerOptions(prev => ({ ...prev, strokeWidth: parseInt(e.target.value, 10) }))}
-                        className="w-full"
-                    />
-                </div>
-                <div className="flex justify-end">
-                    <button
-                        onClick={() => setIsMarkerModalOpen(false)}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                    >
-                        Done
-                    </button>
-                </div>
-            </div>
-        </div>
-    )}
       <input
         ref={fileInputRef}
         type="file"
